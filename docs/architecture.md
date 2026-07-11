@@ -33,7 +33,24 @@ The orchestration layer will generate deterministic workloads, apply seeded faul
 
 ### Concentrate Adapter
 
-Concentrate-specific request and response handling must stay behind a single adapter so routing and reporting code depend on Turbulence contracts, not provider details.
+Concentrate-specific request and response handling stays behind `turbulence_api.integrations.concentrate`. Routes and future simulation code use normalized Turbulence contracts rather than upstream payload shapes.
+
+The adapter owns:
+
+- Live and mock client implementations with the same interface.
+- Concentrate request construction for responses, models, health checks, routing, metadata, and structured output.
+- Upstream status-code mapping for 400, 401, 402, 424, 429, and 5xx responses.
+- Normalized response parsing for response id, returned model, provider only when present, assistant text, usage, cost, status, and errors.
+- Sensitive-data handling. API keys, authorization headers, and complete prompts must not be logged or returned by endpoints.
+
+`CNAI_MODE=mock` returns deterministic mock responses and marks them as mock. `CNAI_MODE=live` uses one reusable `httpx.AsyncClient` managed by FastAPI lifespan.
+
+Concentrate endpoints currently exposed by the API:
+
+- `GET /api/integrations/concentrate/status`
+- `POST /api/integrations/concentrate/test`
+
+The test endpoint sends one short structured-output request only in live mode. It never exposes the configured API key or a partial key.
 
 ### Persistence
 
@@ -42,4 +59,3 @@ Local development uses SQLite through async SQLAlchemy. Configuration remains UR
 ### Event Stream
 
 Simulation events will be streamed over Server-Sent Events. Events must identify whether they are real or simulated and must never invent provider failures, costs, token counts, or routing decisions.
-

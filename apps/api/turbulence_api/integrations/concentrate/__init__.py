@@ -1,0 +1,2 @@
+"""Concentrate AI adapter boundary."""
+

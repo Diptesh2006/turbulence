@@ -30,6 +30,20 @@ Health endpoint:
 curl http://localhost:8000/api/health
 ```
 
+Concentrate integration:
+
+```bash
+curl http://localhost:8000/api/integrations/concentrate/status
+```
+
+Live test requests only run when `CNAI_MODE=live` and `CNAI_API_KEY` is set:
+
+```bash
+curl -X POST http://localhost:8000/api/integrations/concentrate/test `
+  -H "Content-Type: application/json" `
+  -d "{}"
+```
+
 ## Frontend
 
 ```bash
@@ -44,6 +58,13 @@ Open `http://localhost:3000`.
 
 Copy `.env.example` to `.env` for local settings. Backend CORS is controlled by `CORS_ORIGINS`, a comma-separated list of allowed origins.
 
+Concentrate settings:
+
+- `CNAI_API_KEY`: required for live Concentrate requests.
+- `CNAI_BASE_URL`: defaults to `https://api.concentrate.ai/v1`.
+- `CNAI_TIMEOUT_SECONDS`: request timeout in seconds.
+- `CNAI_MODE`: `mock` or `live`; defaults to `mock`.
+
 ## Checks
 
 ```bash
@@ -53,9 +74,17 @@ make web-lint
 make web-typecheck
 ```
 
+Manual live Concentrate check:
+
+```bash
+cd apps/api
+python scripts/manual_concentrate_check.py
+```
+
+The script exits without making a request unless `CNAI_API_KEY` exists.
+
 ## Current Boundaries
 
 - No Redis, Celery, authentication, billing, or Kubernetes.
 - No simulation engine yet.
 - No fabricated provider failures, costs, tokens, or routing decisions.
-

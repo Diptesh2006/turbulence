@@ -19,3 +19,24 @@ pytest
 ruff check .
 ```
 
+## Concentrate
+
+Environment variables:
+
+- `CNAI_API_KEY`: required for live requests.
+- `CNAI_BASE_URL`: defaults to `https://api.concentrate.ai/v1`.
+- `CNAI_TIMEOUT_SECONDS`: request timeout in seconds.
+- `CNAI_MODE`: `mock` or `live`; defaults to `mock`.
+
+Endpoints:
+
+- `GET /api/integrations/concentrate/status`
+- `POST /api/integrations/concentrate/test`
+
+Manual live check:
+
+```bash
+python scripts/manual_concentrate_check.py
+```
+
+The manual script skips without making a request when `CNAI_API_KEY` is not set.

@@ -17,6 +17,13 @@ class Settings(BaseSettings):
         default=["http://localhost:3000"],
         validation_alias="CORS_ORIGINS",
     )
+    cnai_api_key: str | None = Field(default=None, validation_alias="CNAI_API_KEY")
+    cnai_base_url: str = Field(
+        default="https://api.concentrate.ai/v1",
+        validation_alias="CNAI_BASE_URL",
+    )
+    cnai_timeout_seconds: float = Field(default=30.0, validation_alias="CNAI_TIMEOUT_SECONDS")
+    cnai_mode: str = Field(default="mock", validation_alias="CNAI_MODE")
 
     model_config = SettingsConfigDict(
         env_file=".env",
@@ -31,8 +38,15 @@ class Settings(BaseSettings):
             return [origin.strip() for origin in value.split(",") if origin.strip()]
         return value
 
+    @field_validator("cnai_mode")
+    @classmethod
+    def validate_concentrate_mode(cls, value: str) -> str:
+        mode = value.lower()
+        if mode not in {"mock", "live"}:
+            raise ValueError("CNAI_MODE must be either 'mock' or 'live'")
+        return mode
+
 
 @lru_cache
 def get_settings() -> Settings:
     return Settings()
-

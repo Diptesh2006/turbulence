@@ -4,18 +4,18 @@
 
 @layer base {
   :root {
-    --background: 210 20% 98%;
-    --foreground: 222 47% 11%;
+    --background: 210 17% 96%;
+    --foreground: 220 28% 10%;
     --card: 0 0% 100%;
-    --card-foreground: 222 47% 11%;
-    --muted: 210 20% 94%;
-    --muted-foreground: 215 16% 34%;
-    --border: 214 24% 88%;
-    --input: 214 24% 88%;
-    --ring: 199 89% 48%;
-    --primary: 199 89% 48%;
-    --primary-foreground: 210 40% 98%;
-    --radius: 0.5rem;
+    --card-foreground: 220 28% 10%;
+    --muted: 210 16% 91%;
+    --muted-foreground: 215 12% 39%;
+    --border: 214 20% 84%;
+    --input: 214 20% 84%;
+    --ring: 189 91% 33%;
+    --primary: 189 91% 33%;
+    --primary-foreground: 0 0% 100%;
+    --radius: 0.375rem;
   }
 
   * {
@@ -24,6 +24,16 @@
 
   body {
     @apply bg-background text-foreground antialiased;
+    font-feature-settings: "tnum";
   }
 }
 
+@layer components {
+  .panel {
+    @apply rounded-md border bg-card shadow-sm;
+  }
+
+  .metadata {
+    @apply font-mono text-xs tracking-normal;
+  }
+}

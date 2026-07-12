@@ -7,11 +7,10 @@ from turbulence_api.simulation.models import ScenarioConfig
 
 
 def build_seeded_presets(settings: Settings) -> list[ScenarioConfig]:
-    native_mode = "concentrate_native" if settings.cnai_mode == "live" else "mock"
     return [
         ScenarioConfig(
             id="preset-clear-skies",
-            mode=native_mode,
+            mode="mock",
             workload_name="support_ticket_triage",
             request_count=12,
             seed=101,
@@ -29,7 +28,7 @@ def build_seeded_presets(settings: Settings) -> list[ScenarioConfig]:
         ),
         ScenarioConfig(
             id="preset-provider-mayday",
-            mode="deterministic_chaos",
+            mode="mock",
             workload_name="support_ticket_triage",
             request_count=15,
             seed=202,
@@ -61,7 +60,7 @@ def build_seeded_presets(settings: Settings) -> list[ScenarioConfig]:
         ),
         ScenarioConfig(
             id="preset-perfect-storm",
-            mode="deterministic_chaos",
+            mode="mock",
             workload_name="support_ticket_triage",
             request_count=18,
             seed=303,

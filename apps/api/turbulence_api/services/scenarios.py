@@ -39,6 +39,8 @@ class ScenarioService:
 
     async def seed_presets(self, presets: list[ScenarioConfig]) -> None:
         for preset in presets:
+            if await self._repository.get(preset.id) is not None:
+                continue
             self._validate(preset)
             await self._repository.upsert(preset)
 

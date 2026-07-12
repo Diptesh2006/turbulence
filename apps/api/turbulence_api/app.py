@@ -11,6 +11,7 @@ from turbulence_api.api.router import api_router
 from turbulence_api.api.schemas import ProblemDetail
 from turbulence_api.core.config import get_settings
 from turbulence_api.integrations.concentrate.factory import build_concentrate_client
+from turbulence_api.integrations.concentrate.mock import MockConcentrateClient
 from turbulence_api.reporting.compare import CompareRunsService
 from turbulence_api.reporting.reports import PostFlightReportService
 from turbulence_api.repositories.scenarios import ScenarioRepository
@@ -38,6 +39,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.settings = settings
     app.state.workload_registry = build_default_registry()
     app.state.concentrate_client = build_concentrate_client(settings)
+    app.state.mock_concentrate_client = MockConcentrateClient(seed=0)
     app.state.run_store = InMemoryRunStore()
     app.state.event_bus = EventBus()
     app.state.scenario_repository = ScenarioRepository()
@@ -45,6 +47,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         store=app.state.run_store,
         event_bus=app.state.event_bus,
         concentrate_client=app.state.concentrate_client,
+        mock_concentrate_client=app.state.mock_concentrate_client,
         workload_registry=app.state.workload_registry,
     )
     app.state.scenario_service = ScenarioService(

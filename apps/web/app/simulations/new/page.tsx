@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import {
   createRunFromScenario,
   createScenario,
-  getHealth,
+  getIntegrationStatus,
   getScenarios,
   type Scenario,
 } from "@/lib/api";
@@ -17,14 +17,18 @@ import { cloneScenario, validateScenarioBuilder } from "./builder";
 
 export default function NewSimulationPage() {
   const router = useRouter();
-  const health = useQuery({ queryKey: ["health"], queryFn: getHealth });
+  const concentrateStatus = useQuery({
+    queryKey: ["concentrate-status"],
+    queryFn: getIntegrationStatus,
+  });
   const scenarios = useQuery({ queryKey: ["scenarios"], queryFn: getScenarios });
   const presets = scenarios.data?.items.filter((scenario) => scenario.id.startsWith("preset-")) ?? [];
   const [draft, setDraft] = useState<Scenario | null>(null);
-  const liveMode = health.data?.simulation_mode === "live" || health.data?.environment === "production";
+  const backendLive = concentrateStatus.data?.mode === "live" && concentrateStatus.data?.is_mock === false;
+  const liveConfigured = concentrateStatus.data?.configured === true;
   const validation = useMemo(
-    () => (draft ? validateScenarioBuilder(draft, liveMode) : null),
-    [draft, liveMode],
+    () => (draft ? validateScenarioBuilder(draft, backendLive, liveConfigured) : null),
+    [draft, backendLive, liveConfigured],
   );
 
   const saveAndLaunch = useMutation({
@@ -84,10 +88,51 @@ export default function NewSimulationPage() {
                 </button>
               ))}
             </div>
-          </BuilderSection>
+            </BuilderSection>
 
           <form onSubmit={submit} className="space-y-4">
-            <BuilderSection title="2. Traffic">
+            <BuilderSection title="2. Execution mode">
+              <div className="grid gap-3 md:grid-cols-2">
+                <button
+                  type="button"
+                  onClick={() => updateDraft(setDraft, { mode: "mock" })}
+                  className={`rounded-md border p-4 text-left ${
+                    draft?.mode === "mock" ? "border-primary bg-muted" : "bg-white"
+                  }`}
+                >
+                  <div className="font-semibold">Mock deterministic mode</div>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    Safe local execution. Uses deterministic mock responses and consumes no credits.
+                  </p>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => updateDraft(setDraft, { mode: "concentrate_native" })}
+                  className={`rounded-md border p-4 text-left ${
+                    draft?.mode === "concentrate_native" ? "border-primary bg-muted" : "bg-white"
+                  }`}
+                >
+                  <div className="font-semibold">Live Concentrate mode</div>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    Real Concentrate API calls. Provider credits may be consumed; API keys never leave the backend.
+                  </p>
+                  <p className="metadata mt-2 text-xs text-muted-foreground">
+                    Status: {concentrateStatus.data?.mode ?? "unknown"} /{" "}
+                    {concentrateStatus.data?.configured ? "configured" : "not configured"}
+                  </p>
+                </button>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => applyLiveSmokeDefaults(setDraft)}
+                disabled={!draft}
+              >
+                Use 1-request live smoke settings
+              </Button>
+            </BuilderSection>
+
+            <BuilderSection title="3. Traffic">
               <div className="grid gap-3 md:grid-cols-4">
                 <NumberField label="Requests" value={draft?.request_count} onChange={(v) => updateDraft(setDraft, { request_count: v })} />
                 <NumberField label="Concurrency" value={draft?.max_concurrency} onChange={(v) => updateDraft(setDraft, { max_concurrency: v })} />
@@ -99,7 +144,7 @@ export default function NewSimulationPage() {
               </Button>
             </BuilderSection>
 
-            <BuilderSection title="3. Routing">
+            <BuilderSection title="4. Routing">
               <p className="text-sm text-muted-foreground">
                 {draft?.mode === "concentrate_native"
                   ? "Native mode sends model=auto and does not claim a selected provider unless Concentrate returns one."
@@ -110,20 +155,20 @@ export default function NewSimulationPage() {
               </pre>
             </BuilderSection>
 
-            <BuilderSection title="4. Fault schedule">
+            <BuilderSection title="5. Fault schedule">
               <pre className="overflow-auto rounded-md bg-muted p-3 text-xs">
                 {JSON.stringify(draft?.fault_rules ?? [], null, 2)}
               </pre>
             </BuilderSection>
 
-            <BuilderSection title="5. SLOs">
+            <BuilderSection title="6. SLOs">
               <div className="grid gap-3 md:grid-cols-2">
                 <NumberField label="Recovery SLO ms" value={draft?.recovery_time_slo_ms ?? undefined} onChange={(v) => updateDraft(setDraft, { recovery_time_slo_ms: v })} />
                 <NumberField label="Latency SLO ms" value={draft?.latency_slo_ms ?? undefined} onChange={(v) => updateDraft(setDraft, { latency_slo_ms: v })} />
               </div>
             </BuilderSection>
 
-            <BuilderSection title="6. Review and launch">
+            <BuilderSection title="7. Review and launch">
               <div className="grid gap-3 text-sm md:grid-cols-3">
                 <ReviewItem label="Estimated duration" value={validation ? `${(validation.estimatedDurationMs / 1000).toFixed(1)}s` : "N/A"} />
                 <ReviewItem label="Maximum gateway calls" value={validation?.maxGatewayCalls ?? "N/A"} />
@@ -203,4 +248,28 @@ function updateDraft(
   patch: Partial<Scenario>,
 ) {
   setDraft((draft) => (draft ? { ...draft, ...patch } : draft));
+}
+
+function applyLiveSmokeDefaults(
+  setDraft: (updater: (draft: Scenario | null) => Scenario | null) => void,
+) {
+  setDraft((draft) =>
+    draft
+      ? {
+          ...draft,
+          mode: "concentrate_native",
+          request_count: 1,
+          max_concurrency: 1,
+          rate_per_second: 1,
+          fault_rules: [],
+          routing_profile: {
+            id: `${draft.id}-live-gateway-auto`,
+            type: "gateway_auto",
+            routes: [],
+            metric: "performance",
+          },
+          model: "auto",
+        }
+      : draft,
+  );
 }

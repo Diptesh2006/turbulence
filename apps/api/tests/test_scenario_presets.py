@@ -1,6 +1,13 @@
+import pytest
 from fastapi.testclient import TestClient
 
 from turbulence_api.app import create_app
+from turbulence_api.core.config import Settings
+from turbulence_api.repositories.scenarios import ScenarioRepository
+from turbulence_api.services.presets import build_seeded_presets
+from turbulence_api.services.scenarios import ScenarioService
+from turbulence_api.simulation.store import InMemoryRunStore
+from turbulence_api.workloads.registry import build_default_registry
 
 
 def test_presets_are_seeded_idempotently() -> None:
@@ -19,7 +26,7 @@ def test_provider_mayday_preset_shape() -> None:
         response = client.get("/api/scenarios/preset-provider-mayday")
 
     scenario = response.json()["scenario"]
-    assert scenario["mode"] == "deterministic_chaos"
+    assert scenario["mode"] == "mock"
     assert scenario["request_count"] == 15
     assert scenario["max_concurrency"] == 3
     assert scenario["routing_profile"]["type"] == "resilient_route"
@@ -30,6 +37,35 @@ def test_provider_mayday_preset_shape() -> None:
     ]
     assert scenario["fault_rules"][0]["type"] == "provider_outage"
     assert scenario["fault_rules"][0]["target_provider"] == "openai"
+
+
+def test_live_backend_seeded_presets_remain_safe_mock_by_default() -> None:
+    presets = build_seeded_presets(Settings(CNAI_MODE="live"))
+
+    assert {preset.id: preset.mode for preset in presets} == {
+        "preset-clear-skies": "mock",
+        "preset-provider-mayday": "mock",
+        "preset-perfect-storm": "mock",
+    }
+
+
+@pytest.mark.asyncio
+async def test_existing_seeded_mock_scenarios_do_not_become_live_silently() -> None:
+    repository = ScenarioRepository()
+    service = ScenarioService(
+        repository=repository,
+        run_store=InMemoryRunStore(),
+        workload_registry=build_default_registry(),
+        settings=Settings(CNAI_MODE="live"),
+    )
+    original = build_seeded_presets(Settings(CNAI_MODE="mock"))[0]
+    await service.seed_presets([original])
+    live_replacement = original.model_copy(update={"mode": "concentrate_native"})
+
+    await service.seed_presets([live_replacement])
+
+    stored = await service.get(original.id)
+    assert stored.mode == "mock"
 
 
 def test_builder_validation_rejects_duplicate_routes() -> None:
@@ -90,4 +126,3 @@ def _scenario_payload() -> dict:
         },
         "fault_rules": [],
     }
-

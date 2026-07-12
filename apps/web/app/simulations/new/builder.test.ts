@@ -71,8 +71,25 @@ describe("scenario builder validation", () => {
   });
 
   it("warns when live mode can consume credits", () => {
-    const result = validateScenarioBuilder(baseScenario, true);
+    const result = validateScenarioBuilder(
+      { ...baseScenario, mode: "concentrate_native" },
+      true,
+      true,
+    );
     expect(result.warnings.join(" ")).toContain("consume provider credits");
   });
-});
 
+  it("does not warn for mock deterministic mode on a live backend", () => {
+    const result = validateScenarioBuilder({ ...baseScenario, mode: "mock" }, true, true);
+    expect(result.warnings.join(" ")).not.toContain("consume provider credits");
+  });
+
+  it("rejects live mode when the backend is not live", () => {
+    const result = validateScenarioBuilder(
+      { ...baseScenario, mode: "concentrate_native" },
+      false,
+      false,
+    );
+    expect(result.errors.join(" ")).toContain("requires backend CNAI_MODE=live");
+  });
+});

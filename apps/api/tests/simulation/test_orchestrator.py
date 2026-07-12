@@ -17,10 +17,12 @@ from turbulence_api.simulation.store import InMemoryRunStore
 
 
 def orchestrator(client=None) -> SimulationOrchestrator:
+    concentrate_client = client or MockConcentrateClient(seed=0)
     return SimulationOrchestrator(
         store=InMemoryRunStore(),
         event_bus=EventBus(),
-        concentrate_client=client or MockConcentrateClient(seed=0),
+        concentrate_client=concentrate_client,
+        mock_concentrate_client=concentrate_client,
     )
 
 
@@ -32,9 +34,11 @@ def scenario(
     request_count: int = 1,
     rate_per_second: float = 100,
     max_concurrency: int = 2,
+    mode: str = "mock",
 ) -> ScenarioConfig:
     return ScenarioConfig(
         id="scenario-test",
+        mode=mode,
         workload_name="support_ticket_triage",
         request_count=request_count,
         seed=seed,
@@ -220,6 +224,61 @@ async def test_clear_skies_mock_preset_completes_with_all_validations() -> None:
 
 
 @pytest.mark.asyncio
+async def test_mock_scenario_uses_mock_adapter() -> None:
+    live_client = RecordingConcentrateClient(provider="live-provider", is_mock=False)
+    mock_client = RecordingConcentrateClient(provider="mock", is_mock=True)
+    orch = SimulationOrchestrator(
+        store=InMemoryRunStore(),
+        event_bus=EventBus(),
+        concentrate_client=live_client,
+        mock_concentrate_client=mock_client,
+    )
+
+    run = await orch.run_to_completion(
+        scenario(
+            routing_profile=RoutingProfile.single_provider(
+                id="single",
+                route=RouteTarget(model="mock-fast", provider="mock"),
+            ),
+            mode="mock",
+        ),
+        run_id="run-mock-adapter",
+    )
+
+    assert live_client.calls == 0
+    assert mock_client.calls == 1
+    assert run.requests[0].attempts[0].actual_provider == "mock"
+
+
+@pytest.mark.asyncio
+async def test_live_concentrate_native_scenario_uses_live_adapter() -> None:
+    live_client = RecordingConcentrateClient(provider="live-provider", is_mock=False)
+    mock_client = RecordingConcentrateClient(provider="mock", is_mock=True)
+    orch = SimulationOrchestrator(
+        store=InMemoryRunStore(),
+        event_bus=EventBus(),
+        concentrate_client=live_client,
+        mock_concentrate_client=mock_client,
+    )
+
+    run = await orch.run_to_completion(
+        scenario(
+            routing_profile=RoutingProfile.gateway_auto(
+                id="gateway-auto",
+                metric="performance",
+            ),
+            mode="concentrate_native",
+        ),
+        run_id="run-live-adapter",
+    )
+
+    assert live_client.calls == 1
+    assert mock_client.calls == 0
+    assert run.requests[0].attempts[0].actual_provider == "live-provider"
+    assert run.requests[0].attempts[0].actual_model == "auto"
+
+
+@pytest.mark.asyncio
 async def test_cancellation_marks_in_progress_abandoned() -> None:
     orch = orchestrator(client=DelayedMockConcentrateClient())
     run = await orch.create_run(
@@ -326,3 +385,22 @@ class DelayedMockConcentrateClient(MockConcentrateClient):
     async def create_response(self, request: ConcentrateResponseRequest):
         await asyncio.sleep(0.1)
         return await super().create_response(request)
+
+
+class RecordingConcentrateClient(MockConcentrateClient):
+    def __init__(self, *, provider: str, is_mock: bool) -> None:
+        super().__init__(seed=0)
+        self.provider = provider
+        self.is_mock = is_mock
+        self.calls = 0
+
+    async def create_response(self, request: ConcentrateResponseRequest):
+        self.calls += 1
+        response = await super().create_response(request)
+        return response.model_copy(
+            update={
+                "model": request.model,
+                "provider": self.provider,
+                "is_mock": self.is_mock,
+            }
+        )

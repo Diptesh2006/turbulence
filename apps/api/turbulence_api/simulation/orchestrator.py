@@ -7,6 +7,7 @@ from uuid import uuid4
 from turbulence_api.domain.faults import DeterministicFaultInjector, FaultProvenance
 from turbulence_api.domain.routing import RoutingAttempt
 from turbulence_api.integrations.concentrate.client import ConcentrateClientProtocol
+from turbulence_api.integrations.concentrate.mock import MockConcentrateClient
 from turbulence_api.simulation.event_bus import EventBus
 from turbulence_api.simulation.events import EventSource, SimulationEvent
 from turbulence_api.simulation.models import (
@@ -26,11 +27,13 @@ class SimulationOrchestrator:
         store: InMemoryRunStore,
         event_bus: EventBus,
         concentrate_client: ConcentrateClientProtocol,
+        mock_concentrate_client: ConcentrateClientProtocol | None = None,
         workload_registry: WorkloadRegistry | None = None,
     ) -> None:
         self._store = store
         self._event_bus = event_bus
         self._concentrate_client = concentrate_client
+        self._mock_concentrate_client = mock_concentrate_client or MockConcentrateClient(seed=0)
         self._workload_registry = workload_registry or build_default_registry()
         self._tasks: dict[str, asyncio.Task[None]] = {}
         self._cancel_events: dict[str, asyncio.Event] = {}
@@ -238,7 +241,7 @@ class SimulationOrchestrator:
                     )
                     gateway_request.routing = _routing_payload(run.scenario, route_attempt)
                     upstream_started = monotonic()
-                    response = await self._concentrate_client.create_response(gateway_request)
+                    response = await self._client_for(scenario).create_response(gateway_request)
                     attempt_record.upstream_latency_ms = (monotonic() - upstream_started) * 1000
                 except Exception as exc:
                     attempt_record.state = "failed"
@@ -500,6 +503,11 @@ class SimulationOrchestrator:
     def _is_cancelling(self, run_id: str) -> bool:
         cancel_event = self._cancel_events.get(run_id)
         return bool(cancel_event and cancel_event.is_set())
+
+    def _client_for(self, scenario: ScenarioConfig) -> ConcentrateClientProtocol:
+        if scenario.mode == "concentrate_native":
+            return self._concentrate_client
+        return self._mock_concentrate_client
 
 
 def _attempt_record(request_id: str, route_attempt: RoutingAttempt) -> AttemptRecord:

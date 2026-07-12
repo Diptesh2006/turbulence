@@ -12,7 +12,11 @@ export type BuilderValidation = {
   estimatedDurationMs: number;
 };
 
-export function validateScenarioBuilder(scenario: Scenario, liveMode: boolean): BuilderValidation {
+export function validateScenarioBuilder(
+  scenario: Scenario,
+  backendLive: boolean,
+  liveConfigured = true,
+): BuilderValidation {
   const errors: string[] = [];
   const warnings: string[] = [];
   const routeCount =
@@ -62,8 +66,17 @@ export function validateScenarioBuilder(scenario: Scenario, liveMode: boolean): 
       errors.push(`Fault ${typedFault.id ?? "unknown"} window exceeds estimated run duration.`);
     }
   }
-  if (liveMode) {
-    warnings.push("Live mode can consume provider credits. Review request count and route count.");
+  if (scenario.mode === "concentrate_native" && !backendLive) {
+    errors.push("Live Concentrate mode requires backend CNAI_MODE=live.");
+  }
+  if (scenario.mode === "concentrate_native" && backendLive && !liveConfigured) {
+    errors.push("Live Concentrate mode requires CNAI_API_KEY to be configured on the backend.");
+  }
+  if (scenario.mode === "concentrate_native" && backendLive) {
+    warnings.push("Live Concentrate mode makes real API calls and can consume provider credits.");
+    if (scenario.request_count > 3) {
+      warnings.push("For a first live Clear Skies run, use the 1-request live smoke option.");
+    }
   }
 
   return {
@@ -86,4 +99,3 @@ export function cloneScenario(scenario: Scenario, suffix: string): Scenario {
     },
   };
 }
-

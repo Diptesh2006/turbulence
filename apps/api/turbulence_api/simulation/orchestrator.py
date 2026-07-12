@@ -132,15 +132,6 @@ class SimulationOrchestrator:
 
             if self._is_cancelling(run.id):
                 await self._cancel_run(run)
-            elif run.metrics.failed_requests:
-                run.transition_to("failed")
-                await self._store.mark_in_progress_abandoned(run.id)
-                await self._emit(
-                    run.id,
-                    "run.failed",
-                    "system",
-                    {"metrics": run.metrics.model_dump()},
-                )
             else:
                 run.transition_to("completed")
                 await self._emit(
@@ -247,12 +238,8 @@ class SimulationOrchestrator:
                     )
                     gateway_request.routing = _routing_payload(run.scenario, route_attempt)
                     upstream_started = monotonic()
-                    response = await self._concentrate_client.create_response(
-                        gateway_request
-                    )
-                    attempt_record.upstream_latency_ms = (
-                        monotonic() - upstream_started
-                    ) * 1000
+                    response = await self._concentrate_client.create_response(gateway_request)
+                    attempt_record.upstream_latency_ms = (monotonic() - upstream_started) * 1000
                 except Exception as exc:
                     attempt_record.state = "failed"
                     attempt_record.errors.append(str(exc))
@@ -299,9 +286,7 @@ class SimulationOrchestrator:
                         "usage": response.usage.model_dump()
                         if response.usage is not None
                         else None,
-                        "cost": response.cost.model_dump()
-                        if response.cost is not None
-                        else None,
+                        "cost": response.cost.model_dump() if response.cost is not None else None,
                         "upstream_latency_ms": attempt_record.upstream_latency_ms,
                     },
                 )
@@ -394,9 +379,7 @@ class SimulationOrchestrator:
     ) -> None:
         if route_attempt is None or not scenario.fault_rules:
             return
-        clear_at_ms = max(
-            rule.start_after_ms + rule.duration_ms for rule in scenario.fault_rules
-        )
+        clear_at_ms = max(rule.start_after_ms + rule.duration_ms for rule in scenario.fault_rules)
         result = injector.evaluate_pre_call(
             rules=scenario.fault_rules,
             attempt=route_attempt,

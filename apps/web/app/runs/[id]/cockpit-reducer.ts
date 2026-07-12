@@ -66,6 +66,19 @@ export function getSourceBadgeLabel(source: EventSource, event?: SimulationEvent
   return source.toUpperCase();
 }
 
+export function getTerminalRunLabel(state: Run["state"]): string | null {
+  if (state === "completed") {
+    return "Run completed";
+  }
+  if (state === "failed") {
+    return "Run failed";
+  }
+  if (state === "cancelled") {
+    return "Run cancelled";
+  }
+  return null;
+}
+
 export function reconstructRun(initialRun: Run, events: SimulationEvent[]): { run: Run; activeFaults: ActiveFault[] } {
   if (!initialRun) return { run: initialRun, activeFaults: [] };
 

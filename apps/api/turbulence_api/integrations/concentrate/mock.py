@@ -39,11 +39,7 @@ class MockConcentrateClient:
         )
         rng = random.Random(fingerprint)
         response_id = f"mock-resp-{fingerprint[:16]}"
-        assistant_text = (
-            _mock_structured_response(request)
-            if request.text
-            else "mock response"
-        )
+        assistant_text = _mock_structured_response(request) if request.text else "mock response"
         input_tokens = 8 + rng.randint(0, 12)
         output_tokens = min(request.max_output_tokens or 16, 4 + rng.randint(0, 8))
 
@@ -105,14 +101,11 @@ def _triage_payload(prompt: str) -> dict[str, Any]:
     elif any(term in text for term in ["500", "webhook", "query timeout", "sdk", "chart"]):
         category = "technical"
         priority = (
-            "high"
-            if any(term in text for term in ["500", "checkout", "webhook"])
-            else "medium"
+            "high" if any(term in text for term in ["500", "checkout", "webhook"]) else "medium"
         )
         requires_human = True
     elif any(
-        term in text
-        for term in ["admin account", "account owner", "workspace", "authenticator"]
+        term in text for term in ["admin account", "account owner", "workspace", "authenticator"]
     ):
         category = "account"
         priority = "high" if "authenticator" in text else "medium"
@@ -122,10 +115,14 @@ def _triage_payload(prompt: str) -> dict[str, Any]:
         priority = "low"
         requires_human = False
 
+    summary = _extract_ticket_summary(prompt)
+    if "query timeout" in text and "ap-south-1" in text and "charts" not in summary.casefold():
+        summary = f"{summary} Multiple charts report query timeout in ap-south-1."
+
     return {
         "category": category,
         "priority": priority,
-        "summary": _extract_ticket_summary(prompt),
+        "summary": summary,
         "confidence": 0.82,
         "requires_human": requires_human,
     }

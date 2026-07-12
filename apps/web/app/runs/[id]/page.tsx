@@ -24,6 +24,7 @@ import {
   CockpitState,
   getCockpitActionState,
   getSourceBadgeLabel,
+  getTerminalRunLabel,
   buildRunEventsUrl,
 } from "./cockpit-reducer";
 import { computeMetrics, DerivedMetrics } from "./cockpit-metrics";
@@ -234,6 +235,7 @@ export default function RunCockpitPage({ params }: { params: { id: string } }) {
   if (!run) return null;
 
   const cockpitActions = getCockpitActionState(run);
+  const terminalRunLabel = getTerminalRunLabel(run.state);
 
   // Calculate live metrics on client
   const metrics: DerivedMetrics = computeMetrics(run, state.events);
@@ -393,8 +395,10 @@ export default function RunCockpitPage({ params }: { params: { id: string } }) {
               <StopCircle className="h-4 w-4" /> Cancel
             </Button>
           )}
-          {run.state !== "created" && run.state !== "running" && (
-            <div className="text-xs text-muted-foreground text-right w-full">Run Completed</div>
+          {terminalRunLabel && (
+            <div className="text-xs text-muted-foreground text-right w-full">
+              {terminalRunLabel}
+            </div>
           )}
         </div>
       </section>

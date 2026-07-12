@@ -7,6 +7,7 @@ import {
   SimulationEvent,
   getCockpitActionState,
   getSourceBadgeLabel,
+  getTerminalRunLabel,
   buildRunEventsUrl,
 } from "./cockpit-reducer";
 import { computeMetrics } from "./cockpit-metrics";
@@ -301,5 +302,13 @@ describe("cockpit-reducer & helpers", () => {
     const completedActions = getCockpitActionState(completedRun);
     expect(completedActions.canStart).toBe(false);
     expect(completedActions.canCancel).toBe(false);
+  });
+
+  it("labels terminal run states accurately", () => {
+    expect(getTerminalRunLabel("completed")).toBe("Run completed");
+    expect(getTerminalRunLabel("failed")).toBe("Run failed");
+    expect(getTerminalRunLabel("cancelled")).toBe("Run cancelled");
+    expect(getTerminalRunLabel("created")).toBeNull();
+    expect(getTerminalRunLabel("running")).toBeNull();
   });
 });

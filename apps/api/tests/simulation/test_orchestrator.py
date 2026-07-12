@@ -4,10 +4,12 @@ import asyncio
 
 import pytest
 
+from turbulence_api.core.config import Settings
 from turbulence_api.domain.faults import FaultRule
 from turbulence_api.domain.routing import RouteTarget, RoutingProfile
 from turbulence_api.integrations.concentrate.mock import MockConcentrateClient
 from turbulence_api.integrations.concentrate.models import ConcentrateResponseRequest
+from turbulence_api.services.presets import build_seeded_presets
 from turbulence_api.simulation.event_bus import EventBus
 from turbulence_api.simulation.models import ScenarioConfig
 from turbulence_api.simulation.orchestrator import SimulationOrchestrator
@@ -135,11 +137,86 @@ async def test_all_routes_failed() -> None:
 
     events = await orch.replay_events_after(run.id, None)
 
-    assert run.state == "failed"
+    assert run.state == "completed"
     assert run.metrics.failed_requests == 1
     assert run.requests[0].state == "failed"
     assert all(attempt.state == "blocked" for attempt in run.requests[0].attempts)
+    assert events[-1].type == "run.completed"
+
+
+@pytest.mark.asyncio
+async def test_request_validation_failure_completes_run_with_degraded_metrics() -> None:
+    orch = orchestrator()
+    run = await orch.run_to_completion(
+        scenario(
+            routing_profile=RoutingProfile.single_provider(
+                id="single",
+                route=RouteTarget(model="mock-fast", provider="mock"),
+            ),
+            fault_rules=[
+                FaultRule(
+                    id="bad-json",
+                    type="malformed_json",
+                    start_after_ms=0,
+                    duration_ms=10_000,
+                    probability=1,
+                )
+            ],
+        ),
+        run_id="run-validation-failure",
+    )
+
+    events = await orch.replay_events_after(run.id, None)
+
+    assert run.state == "completed"
+    assert run.metrics.completed_requests == 0
+    assert run.metrics.failed_requests == 1
+    assert run.metrics.passed_validations == 0
+    assert run.metrics.failed_validations == 1
+    assert run.requests[0].state == "failed"
+    assert run.requests[0].attempts[0].state == "failed"
+    assert events[-1].type == "run.completed"
+
+
+@pytest.mark.asyncio
+async def test_fatal_orchestrator_exception_marks_run_failed() -> None:
+    orch = orchestrator()
+    config = scenario(
+        routing_profile=RoutingProfile.single_provider(
+            id="single",
+            route=RouteTarget(model="mock-fast", provider="mock"),
+        )
+    )
+    config.workload_name = "missing_workload"
+
+    run = await orch.run_to_completion(config, run_id="run-fatal")
+    events = await orch.replay_events_after(run.id, None)
+
+    assert run.state == "failed"
+    assert run.error is not None
     assert events[-1].type == "run.failed"
+    assert "missing_workload" in events[-1].payload["error"]
+
+
+@pytest.mark.asyncio
+async def test_clear_skies_mock_preset_completes_with_all_validations() -> None:
+    settings = Settings(CNAI_MODE="mock")
+    preset = next(
+        item for item in build_seeded_presets(settings) if item.id == "preset-clear-skies"
+    )
+    fast_preset = preset.model_copy(update={"rate_per_second": 1000})
+
+    run = await orchestrator().run_to_completion(
+        fast_preset,
+        run_id="run-clear-skies",
+    )
+
+    assert run.state == "completed"
+    assert run.metrics.total_requests == 12
+    assert run.metrics.completed_requests == 12
+    assert run.metrics.failed_requests == 0
+    assert run.metrics.passed_validations == 12
+    assert run.metrics.failed_validations == 0
 
 
 @pytest.mark.asyncio
@@ -249,4 +326,3 @@ class DelayedMockConcentrateClient(MockConcentrateClient):
     async def create_response(self, request: ConcentrateResponseRequest):
         await asyncio.sleep(0.1)
         return await super().create_response(request)
-

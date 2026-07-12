@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import pytest
+
+from turbulence_api.integrations.concentrate.mock import MockConcentrateClient
 from turbulence_api.integrations.concentrate.models import NormalizedConcentrateResponse
 from turbulence_api.workloads.support_ticket_triage import (
     SUPPORT_TICKET_TRIAGE_FIXTURES,
@@ -120,3 +123,45 @@ def test_summary_keyword_coverage_is_fractional_without_llm_judge() -> None:
     assert result.score.summary_keyword_coverage == 2 / 3
     assert result.score.overall_correct is False
 
+
+@pytest.mark.asyncio
+async def test_all_support_ticket_fixtures_pass_with_mock_adapter() -> None:
+    workload = SupportTicketTriageWorkload()
+    client = MockConcentrateClient(seed=0)
+
+    failures: list[tuple[str, float, list[str]]] = []
+    for fixture in SUPPORT_TICKET_TRIAGE_FIXTURES:
+        request = workload.build_request(
+            fixture,
+            model="mock-fast",
+            max_output_tokens=128,
+        )
+        response = await client.create_response(request)
+        result = workload.validate_response(fixture, response)
+        if not result.score.overall_correct:
+            failures.append(
+                (
+                    fixture.id,
+                    result.score.summary_keyword_coverage,
+                    result.errors,
+                )
+            )
+
+    assert failures == []
+
+
+@pytest.mark.asyncio
+async def test_stt_012_passes_mock_validation() -> None:
+    workload = SupportTicketTriageWorkload()
+    client = MockConcentrateClient(seed=0)
+    fixture = next(item for item in SUPPORT_TICKET_TRIAGE_FIXTURES if item.id == "stt-012")
+
+    request = workload.build_request(fixture, model="mock-fast", max_output_tokens=128)
+    response = await client.create_response(request)
+    result = workload.validate_response(fixture, response)
+
+    assert result.score.schema_valid is True
+    assert result.score.category_correct is True
+    assert result.score.priority_correct is True
+    assert result.score.summary_keyword_coverage == 1.0
+    assert result.score.overall_correct is True

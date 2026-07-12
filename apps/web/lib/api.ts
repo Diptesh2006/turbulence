@@ -2,6 +2,20 @@ import { z } from "zod";
 
 const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
 
+export const runStateSchema = z.enum(["created", "running", "completed", "failed", "cancelling", "cancelled"]);
+
+export const faultRuleSchema = z.object({
+  id: z.string(),
+  type: z.enum(["provider_outage", "rate_limit_burst", "latency_spike", "malformed_json"]),
+  target_provider: z.string().nullable().optional(),
+  target_model: z.string().nullable().optional(),
+  start_after_ms: z.number().default(0),
+  duration_ms: z.number().default(0),
+  probability: z.number().default(1),
+  parameters: z.record(z.unknown()).default({}),
+  enabled: z.boolean().default(true),
+});
+
 export const healthSchema = z.object({
   service: z.string(),
   status: z.string(),
@@ -48,7 +62,7 @@ export const scenarioSchema = z.object({
   recovery_time_slo_ms: z.number().nullable().optional(),
   latency_slo_ms: z.number().nullable().optional(),
   routing_profile: routingProfileSchema,
-  fault_rules: z.array(z.unknown()),
+  fault_rules: z.array(faultRuleSchema).default([]),
 });
 
 export const scenarioListSchema = z.object({
@@ -67,7 +81,7 @@ export const runMetricsSchema = z.object({
 export const runSummarySchema = z.object({
   id: z.string(),
   scenario_id: z.string(),
-  state: z.string(),
+  state: runStateSchema,
   created_at: z.string(),
   updated_at: z.string(),
   metrics: runMetricsSchema,
@@ -80,13 +94,75 @@ export const runListSchema = z.object({
   total: z.number(),
 });
 
+export const faultProvenanceSchema = z.object({
+  rule_id: z.string(),
+  type: z.string(),
+  source: z.literal("simulated").default("simulated"),
+  target_provider: z.string().nullable().optional(),
+  target_model: z.string().nullable().optional(),
+  simulated_status_code: z.number().nullable().optional(),
+  retry_after_ms: z.number().nullable().optional(),
+  injected_delay_ms: z.number().default(0),
+  corrupted_response: z.boolean().default(false),
+  original_response_preserved: z.boolean().default(false),
+});
+
+export const attemptRecordSchema = z.object({
+  id: z.string(),
+  request_id: z.string(),
+  index: z.number(),
+  model: z.string(),
+  provider: z.string().nullable().optional(),
+  actual_model: z.string().nullable().optional(),
+  actual_provider: z.string().nullable().optional(),
+  state: z.enum(["started", "completed", "failed", "blocked", "abandoned"]),
+  simulator_managed_fallback: z.boolean().default(false),
+  fault_provenance: z.array(faultProvenanceSchema).default([]),
+  upstream_response_id: z.string().nullable().optional(),
+  simulated_status_code: z.number().nullable().optional(),
+  validation_passed: z.boolean().nullable().optional(),
+  upstream_latency_ms: z.number().nullable().optional(),
+  injected_latency_ms: z.number().default(0),
+  input_tokens: z.number().nullable().optional(),
+  output_tokens: z.number().nullable().optional(),
+  total_tokens: z.number().nullable().optional(),
+  cost_total: z.number().nullable().optional(),
+  errors: z.array(z.string()).default([]),
+});
+
+export const requestRecordSchema = z.object({
+  id: z.string(),
+  fixture_id: z.string(),
+  state: z.enum(["queued", "running", "completed", "failed", "abandoned"]),
+  attempts: z.array(attemptRecordSchema).default([]),
+  validation_result: z.object({
+    score: z.object({
+      schema_valid: z.boolean(),
+      category_correct: z.boolean(),
+      priority_correct: z.boolean(),
+      summary_keyword_coverage: z.number(),
+      overall_correct: z.boolean(),
+    }),
+    errors: z.array(z.string()).optional(),
+  }).nullable().optional(),
+});
+
+export const simulationEventSchema = z.object({
+  sequence: z.number(),
+  type: z.string(),
+  source: z.enum(["real", "simulated", "system", "mock"]),
+  timestamp: z.string(),
+  run_id: z.string(),
+  payload: z.record(z.unknown()).default({}),
+});
+
 export const runSchema = z.object({
   id: z.string(),
   scenario: scenarioSchema,
-  state: z.string(),
+  state: runStateSchema,
   created_at: z.string(),
   updated_at: z.string(),
-  requests: z.array(z.unknown()).optional(),
+  requests: z.array(requestRecordSchema).optional(),
   metrics: runMetricsSchema,
   error: z.string().nullable().optional(),
 });
@@ -158,6 +234,9 @@ export type WorkloadSummary = z.infer<typeof workloadSchema>;
 export type Scenario = z.infer<typeof scenarioSchema>;
 export type RunSummary = z.infer<typeof runSummarySchema>;
 export type Run = z.infer<typeof runSchema>;
+export type AttemptRecord = z.infer<typeof attemptRecordSchema>;
+export type RequestRecord = z.infer<typeof requestRecordSchema>;
+export type SimulationEvent = z.infer<typeof simulationEventSchema>;
 export type Report = z.infer<typeof reportSchema>["report"];
 export type Comparison = z.infer<typeof comparisonSchema>["comparison"];
 
@@ -208,6 +287,18 @@ export function getRuns(page = 1, pageSize = 10) {
 
 export function getRun(id: string) {
   return requestJson(`/api/runs/${id}`, runResponseSchema);
+}
+
+export function startRun(id: string) {
+  return requestJson(`/api/runs/${id}/start`, runResponseSchema, {
+    method: "POST",
+  });
+}
+
+export function cancelRun(id: string) {
+  return requestJson(`/api/runs/${id}/cancel`, runResponseSchema, {
+    method: "POST",
+  });
 }
 
 export function getRunReport(id: string) {

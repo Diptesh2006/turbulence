@@ -97,7 +97,10 @@ async def run_events(run_id: str, request: Request) -> StreamingResponse:
     if await orchestrator.get_run(run_id) is None:
         raise NotFoundError("Run not found")
 
-    last_event_id = _parse_last_event_id(request.headers.get("last-event-id"))
+    last_event_id = _parse_last_event_id(
+        request.headers.get("last-event-id")
+        or request.query_params.get("last_event_id")
+    )
 
     async def stream() -> AsyncIterator[str]:
         replayed = await orchestrator.replay_events_after(run_id, last_event_id)

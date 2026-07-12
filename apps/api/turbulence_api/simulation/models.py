@@ -23,6 +23,8 @@ class ScenarioConfig(BaseModel):
     max_concurrency: int = Field(default=1, ge=1)
     model: str = "mock-fast"
     max_output_tokens: int = Field(default=128, ge=1)
+    recovery_time_slo_ms: int | None = Field(default=None, ge=1)
+    latency_slo_ms: int | None = Field(default=None, ge=1)
     routing_profile: RoutingProfile
     fault_rules: list[FaultRule] = Field(default_factory=list)
 
@@ -42,12 +44,20 @@ class AttemptRecord(BaseModel):
     index: int
     model: str
     provider: str | None = None
+    actual_model: str | None = None
+    actual_provider: str | None = None
     state: AttemptState = "started"
     simulator_managed_fallback: bool = False
     fault_provenance: list[FaultProvenance] = Field(default_factory=list)
     upstream_response_id: str | None = None
     simulated_status_code: int | None = None
     validation_passed: bool | None = None
+    upstream_latency_ms: float | None = None
+    injected_latency_ms: int = 0
+    input_tokens: int | None = None
+    output_tokens: int | None = None
+    total_tokens: int | None = None
+    cost_total: float | None = None
     errors: list[str] = Field(default_factory=list)
 
 
@@ -73,4 +83,3 @@ class SimulationRun(BaseModel):
         validate_transition(self.state, next_state)
         self.state = next_state
         self.updated_at = datetime.now(UTC)
-

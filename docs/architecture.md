@@ -114,6 +114,53 @@ SSE behavior:
 - The stream closes after `run.completed`, `run.failed`, or `run.cancelled`.
 - Client disconnects close the subscription only; they do not stop the simulation.
 
+### Metrics and Reports
+
+`MetricsAggregator` computes incremental snapshots for the live UI from the stored run, requests, attempts, and persisted events. `PostFlightReportService` wraps a final snapshot with run metadata after the run is terminal. Final narrative reporting is intentionally not implemented yet.
+
+Unknown upstream values remain `null`. Missing cost, missing token counts, missing latency samples, or missing validation results are never interpreted as zero.
+
+Metric formulas:
+
+- Total logical requests: configured/stored logical request count.
+- Total attempts: count of stored attempt records.
+- Successful requests: requests with state `completed`.
+- Failed requests: requests with state `failed`.
+- Availability percentage: `successful_requests / total_logical_requests * 100`; `null` if total is zero.
+- Fallback-triggered requests: requests with at least one simulator-managed fallback attempt.
+- Successful fallback recoveries: fallback-triggered requests that completed successfully.
+- Fallback recovery rate: `successful_fallback_recoveries / fallback_triggered_requests * 100`; `null` when no fallback was triggered.
+- Retry count: sum of `max(0, attempts_per_request - 1)`.
+- Real error count: count of stored gateway/adapter errors on attempts.
+- Simulated error count: count of simulated fault occurrences that produce an error condition, such as simulated HTTP status or corrupted response.
+- Schema-valid response rate: `schema_valid_outputs / validated_outputs * 100`; `null` when no validation occurred.
+- Category accuracy: `category_correct / schema_valid_outputs * 100`; `null` when no schema-valid outputs exist.
+- Priority accuracy: `priority_correct / schema_valid_outputs * 100`; `null` when no schema-valid outputs exist.
+- Overall correctness rate: `overall_correct / validated_outputs * 100`; `null` when no validation occurred.
+- p50/p95 latency: nearest-rank percentile over available samples. Rank is `ceil(percentile / 100 * sample_count)`.
+- End-to-end latency: `request.completed.timestamp - request.queued.timestamp`.
+- Upstream latency: measured adapter call duration, excluding injected latency.
+- Total injected latency: sum of injected latency samples; `null` when none were injected.
+- Input/output/total tokens: sum of available token fields; `null` when no attempts returned that field.
+- Total cost: sum of available `cost_total`; `null` when no attempts returned cost.
+- Cost per successful request: `total_cost / successful_requests`; `null` when cost is unknown or successful requests is zero.
+- Time to recovery after a fault begins: first `fault.activated` timestamp to the first successful fallback `request.completed`; `null` when no such recovery exists.
+- Requests by actual model/provider: successful requests grouped by returned model/provider when present, falling back to attempted model/provider and `unknown` provider.
+- Error distribution by type: counts simulated fault types/status labels, validation failures, and real gateway errors separately.
+- Route-attempt distribution: attempts grouped by `route_index:model/provider`.
+
+Resilience score is transparent and ranges from 0 to 100:
+
+- Availability: 30 points from `availability_percentage / 100 * 30`.
+- Recovery against configured recovery-time SLO: 20 points. Full points when recovery time is at or below SLO; otherwise `recovery_slo_ms / time_to_recovery_ms * 20`.
+- Fallback recovery rate: 20 points from `fallback_recovery_rate / 100 * 20`.
+- Correctness: 15 points from `overall_correctness_rate / 100 * 15`.
+- p95 latency against configured latency SLO: 15 points. Full points when p95 latency is at or below SLO; otherwise `latency_slo_ms / p95_latency_ms * 15`.
+
+When a component is not applicable, it is excluded and recorded with a reason. Applicable components are reweighted proportionally: `sum(earned applicable points) / sum(max applicable points) * 100`.
+
+`CompareRunsService` compares two metric snapshots and returns absolute differences plus percentage differences where the baseline value is numeric and non-zero.
+
 ### Workloads
 
 Workloads live behind `turbulence_api.workloads`. Each workload exposes deterministic fixture selection by random seed, prompt construction, Concentrate request construction, and local validation/scoring. `WorkloadRegistry` is the lookup boundary for runnable workloads.

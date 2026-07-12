@@ -212,6 +212,8 @@ class SimulationOrchestrator:
                     )
 
                 if pre.injected_delay_ms:
+                    attempt_record.injected_latency_ms += pre.injected_delay_ms
+                    await self._store.save_attempt(run.id, request.id, attempt_record)
                     await asyncio.sleep(pre.injected_delay_ms / 1000)
 
                 if not pre.should_send_upstream:
@@ -244,9 +246,13 @@ class SimulationOrchestrator:
                         max_output_tokens=scenario.max_output_tokens,
                     )
                     gateway_request.routing = _routing_payload(run.scenario, route_attempt)
+                    upstream_started = monotonic()
                     response = await self._concentrate_client.create_response(
                         gateway_request
                     )
+                    attempt_record.upstream_latency_ms = (
+                        monotonic() - upstream_started
+                    ) * 1000
                 except Exception as exc:
                     attempt_record.state = "failed"
                     attempt_record.errors.append(str(exc))
@@ -271,6 +277,14 @@ class SimulationOrchestrator:
                     continue
 
                 attempt_record.upstream_response_id = response.id
+                attempt_record.actual_model = response.model
+                attempt_record.actual_provider = response.provider
+                if response.usage is not None:
+                    attempt_record.input_tokens = response.usage.input_tokens
+                    attempt_record.output_tokens = response.usage.output_tokens
+                    attempt_record.total_tokens = response.usage.total_tokens
+                if response.cost is not None:
+                    attempt_record.cost_total = response.cost.total
                 await self._emit(
                     run.id,
                     "gateway.response_received",
@@ -282,6 +296,13 @@ class SimulationOrchestrator:
                         "model": response.model,
                         "provider": response.provider,
                         "is_mock": response.is_mock,
+                        "usage": response.usage.model_dump()
+                        if response.usage is not None
+                        else None,
+                        "cost": response.cost.model_dump()
+                        if response.cost is not None
+                        else None,
+                        "upstream_latency_ms": attempt_record.upstream_latency_ms,
                     },
                 )
 

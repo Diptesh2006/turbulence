@@ -23,6 +23,23 @@ class InMemoryRunStore:
         async with self._lock:
             return self._runs.get(run_id)
 
+    async def list_runs(
+        self,
+        *,
+        offset: int = 0,
+        limit: int = 50,
+    ) -> tuple[list[SimulationRun], int]:
+        async with self._lock:
+            runs = list(self._runs.values())
+        runs.sort(key=lambda run: run.created_at, reverse=True)
+        return runs[offset : offset + limit], len(runs)
+
+    async def list_runs_by_scenario(self, scenario_id: str) -> list[SimulationRun]:
+        async with self._lock:
+            return [
+                run for run in self._runs.values() if run.scenario.id == scenario_id
+            ]
+
     async def save_request(self, run_id: str, request: RequestRecord) -> None:
         async with self._lock:
             run = self._runs[run_id]

@@ -28,6 +28,11 @@ class Settings(BaseSettings):
         default=128,
         validation_alias="WORKLOAD_MAX_OUTPUT_TOKENS",
     )
+    max_simulation_requests: int = Field(default=100, validation_alias="MAX_SIMULATION_REQUESTS")
+    max_simulation_concurrency: int = Field(
+        default=10,
+        validation_alias="MAX_SIMULATION_CONCURRENCY",
+    )
 
     model_config = SettingsConfigDict(
         env_file=".env",

@@ -12,10 +12,12 @@ from turbulence_api.simulation.state import RunState, validate_transition
 
 RequestState = Literal["queued", "running", "completed", "failed", "abandoned"]
 AttemptState = Literal["started", "completed", "failed", "blocked", "abandoned"]
+ScenarioMode = Literal["concentrate_native", "deterministic_chaos", "mock"]
 
 
 class ScenarioConfig(BaseModel):
     id: str
+    mode: ScenarioMode = "mock"
     workload_name: str = "support_ticket_triage"
     request_count: int = Field(default=1, ge=1)
     seed: int = 0

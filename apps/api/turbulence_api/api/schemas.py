@@ -34,6 +34,7 @@ class RoutingProfileSummary(BaseModel):
 
 class ScenarioRequest(BaseModel):
     id: str = Field(examples=["support-triage-smoke"])
+    mode: str = Field(default="mock", examples=["deterministic_chaos"])
     workload_name: str = Field(default="support_ticket_triage", examples=["support_ticket_triage"])
     request_count: int = Field(default=5, ge=1, examples=[5])
     seed: int = Field(default=0, examples=[42])
@@ -51,6 +52,7 @@ class ScenarioRequest(BaseModel):
             "examples": [
                 {
                     "id": "support-triage-smoke",
+                    "mode": "mock",
                     "workload_name": "support_ticket_triage",
                     "request_count": 3,
                     "seed": 42,
@@ -119,4 +121,3 @@ class ComparisonResponse(BaseModel):
 
 class ReportResponse(BaseModel):
     report: PostFlightReport
-

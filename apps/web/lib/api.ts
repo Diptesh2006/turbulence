@@ -52,6 +52,7 @@ export const routingProfileSchema = z.object({
 
 export const scenarioSchema = z.object({
   id: z.string(),
+  mode: z.enum(["concentrate_native", "deterministic_chaos", "mock"]).default("mock"),
   workload_name: z.string(),
   request_count: z.number(),
   seed: z.number(),
@@ -283,6 +284,20 @@ export function getScenarios() {
 
 export function getRuns(page = 1, pageSize = 10) {
   return requestJson(`/api/runs?page=${page}&page_size=${pageSize}`, runListSchema);
+}
+
+export function createScenario(scenario: Scenario) {
+  return requestJson("/api/scenarios", z.object({ scenario: scenarioSchema }), {
+    method: "POST",
+    body: JSON.stringify(scenario),
+  });
+}
+
+export function createRunFromScenario(scenarioId: string) {
+  return requestJson("/api/runs", runResponseSchema, {
+    method: "POST",
+    body: JSON.stringify({ scenario_id: scenarioId }),
+  });
 }
 
 export function getRun(id: string) {

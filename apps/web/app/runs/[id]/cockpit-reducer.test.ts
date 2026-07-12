@@ -14,6 +14,7 @@ import { Run } from "@/lib/api";
 
 const mockScenario = {
   id: "support-triage-resilient",
+  mode: "deterministic_chaos" as const,
   workload_name: "support_ticket_triage",
   request_count: 3,
   seed: 42,

@@ -37,6 +37,11 @@ class ScenarioService:
         self._validate(scenario)
         return await self._repository.upsert(scenario)
 
+    async def seed_presets(self, presets: list[ScenarioConfig]) -> None:
+        for preset in presets:
+            self._validate(preset)
+            await self._repository.upsert(preset)
+
     async def update(self, scenario_id: str, scenario: ScenarioConfig) -> ScenarioConfig:
         if scenario.id != scenario_id:
             raise ValidationServiceError("Scenario id in path and body must match")
@@ -65,3 +70,19 @@ class ScenarioService:
             raise ValidationServiceError("Scenario max_concurrency exceeds configured limit")
         if scenario.max_concurrency > scenario.request_count:
             raise ValidationServiceError("max_concurrency cannot exceed request_count")
+        if scenario.routing_profile.type == "resilient_route":
+            seen_routes: set[tuple[str, str | None]] = set()
+            for route in scenario.routing_profile.routes:
+                key = (route.model, route.provider)
+                if key in seen_routes:
+                    raise ValidationServiceError(
+                        "resilient routing cannot contain duplicate routes"
+                    )
+                seen_routes.add(key)
+
+        estimated_duration_ms = scenario.request_count / scenario.rate_per_second * 1000
+        for rule in scenario.fault_rules:
+            if rule.probability < 0 or rule.probability > 1:
+                raise ValidationServiceError("fault probability must be between 0 and 1")
+            if rule.start_after_ms + rule.duration_ms > estimated_duration_ms:
+                raise ValidationServiceError("fault window must fit within estimated run duration")

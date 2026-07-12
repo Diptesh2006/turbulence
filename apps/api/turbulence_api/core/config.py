@@ -33,6 +33,16 @@ class Settings(BaseSettings):
         default=10,
         validation_alias="MAX_SIMULATION_CONCURRENCY",
     )
+    openai_model_id: str = Field(default="gpt-4.1-mini", validation_alias="OPENAI_MODEL_ID")
+    anthropic_model_id: str = Field(
+        default="claude-3-5-haiku-latest",
+        validation_alias="ANTHROPIC_MODEL_ID",
+    )
+    google_model_id: str = Field(
+        default="gemini-1.5-flash",
+        validation_alias="GOOGLE_MODEL_ID",
+    )
+    mock_model_id: str = Field(default="mock-fast", validation_alias="MOCK_MODEL_ID")
 
     model_config = SettingsConfigDict(
         env_file=".env",

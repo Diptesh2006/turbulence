@@ -75,6 +75,7 @@ Example scenario:
 ```json
 {
   "id": "support-triage-smoke",
+  "mode": "mock",
   "workload_name": "support_ticket_triage",
   "request_count": 3,
   "seed": 42,
@@ -92,6 +93,55 @@ Example scenario:
   "fault_rules": []
 }
 ```
+
+## Seeded Presets
+
+The backend seeds three scenarios idempotently during startup. Model identifiers come from backend configuration:
+
+- `OPENAI_MODEL_ID`
+- `ANTHROPIC_MODEL_ID`
+- `GOOGLE_MODEL_ID`
+- `MOCK_MODEL_ID`
+
+`preset-clear-skies`
+
+- Purpose: establish baseline
+- Mode: `concentrate_native` in live environments, `mock` otherwise
+- 12 logical requests
+- concurrency 2
+- no injected faults
+- gateway auto routing
+- performance metric
+
+`preset-provider-mayday`
+
+- Purpose: show deterministic failover and recovery
+- Mode: `deterministic_chaos`
+- 15 logical requests
+- concurrency 3
+- resilient route using OpenAI primary, Anthropic fallback, and Google fallback
+- `provider_outage` against the primary provider during the middle third of the estimated run
+
+`preset-perfect-storm`
+
+- Purpose: demonstrate compound degradation
+- Mode: `deterministic_chaos`
+- 18 logical requests
+- concurrency 3
+- resilient route
+- starts with latency spike
+- follows with a short rate-limit burst
+- corrupts a small percentage of structured outputs
+
+Builder validation mirrors backend validation:
+
+- request and concurrency limits are enforced by `MAX_SIMULATION_REQUESTS` and `MAX_SIMULATION_CONCURRENCY`
+- fault probability must be between 0 and 1
+- fault windows must fit within estimated run duration: `request_count / rate_per_second * 1000`
+- resilient routing requires at least two routes
+- duplicate routes are rejected
+- live mode shows a credit-consumption warning
+- the UI shows maximum possible gateway calls, not a fabricated dollar estimate
 
 ## Runs
 

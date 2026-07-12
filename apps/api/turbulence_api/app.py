@@ -15,6 +15,7 @@ from turbulence_api.reporting.compare import CompareRunsService
 from turbulence_api.reporting.reports import PostFlightReportService
 from turbulence_api.repositories.scenarios import ScenarioRepository
 from turbulence_api.services.errors import ServiceError
+from turbulence_api.services.presets import build_seeded_presets
 from turbulence_api.services.runs import RunService
 from turbulence_api.services.scenarios import ScenarioService
 from turbulence_api.simulation.event_bus import EventBus
@@ -58,6 +59,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         report_service=PostFlightReportService(),
         compare_service=CompareRunsService(),
     )
+    await app.state.scenario_service.seed_presets(build_seeded_presets(settings))
     try:
         yield
     finally:

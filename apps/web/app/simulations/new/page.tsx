@@ -1,77 +1,206 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
-import Link from "next/link";
-import { getScenarios, getWorkloads } from "@/lib/api";
+import { FormEvent, useMemo, useState } from "react";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { useRouter } from "next/navigation";
+import {
+  createRunFromScenario,
+  createScenario,
+  getHealth,
+  getScenarios,
+  type Scenario,
+} from "@/lib/api";
 import { PageHeader } from "@/components/page-header";
-import { EmptyState, ErrorState, LoadingSkeleton } from "@/components/states";
-import { ScenarioCard } from "@/components/scenario-card";
+import { Button } from "@/components/ui/button";
+import { ErrorState, LoadingSkeleton } from "@/components/states";
+import { cloneScenario, validateScenarioBuilder } from "./builder";
 
 export default function NewSimulationPage() {
-  const workloads = useQuery({ queryKey: ["workloads"], queryFn: getWorkloads });
+  const router = useRouter();
+  const health = useQuery({ queryKey: ["health"], queryFn: getHealth });
   const scenarios = useQuery({ queryKey: ["scenarios"], queryFn: getScenarios });
+  const presets = scenarios.data?.items.filter((scenario) => scenario.id.startsWith("preset-")) ?? [];
+  const [draft, setDraft] = useState<Scenario | null>(null);
+  const liveMode = health.data?.simulation_mode === "live" || health.data?.environment === "production";
+  const validation = useMemo(
+    () => (draft ? validateScenarioBuilder(draft, liveMode) : null),
+    [draft, liveMode],
+  );
+
+  const saveAndLaunch = useMutation({
+    mutationFn: async () => {
+      if (!draft) throw new Error("Select a preset before launching.");
+      const saved = await createScenario(draft);
+      const run = await createRunFromScenario(saved.scenario.id);
+      return run.run;
+    },
+    onSuccess: (run) => router.push(`/runs/${run.id}`),
+  });
+
+  function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!draft || validation?.errors.length) return;
+    saveAndLaunch.mutate();
+  }
 
   return (
     <div>
       <PageHeader
         eyebrow="Simulation setup"
-        title="Scenario configuration flow"
-        description="Select a preset or saved scenario. Run creation controls will use the public API; live SSE cockpit is intentionally deferred."
+        title="Scenario builder"
+        description="Configure deterministic traffic, routing, faults, and SLOs. Native routing delegates to Concentrate; deterministic chaos uses Turbulence-managed fallback and simulated faults."
       />
 
-      <div className="grid gap-6 xl:grid-cols-[1fr_360px]">
+      <div className="grid gap-6 xl:grid-cols-[1fr_380px]">
         <section className="space-y-4">
-          <div className="panel p-4">
-            <h2 className="font-semibold">1. Choose workload</h2>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Workloads define deterministic fixtures and validation rules.
-            </p>
-            <div className="mt-4 grid gap-4 md:grid-cols-2">
-              {workloads.isLoading ? <LoadingSkeleton rows={2} /> : null}
-              {workloads.isError ? <ErrorState error={workloads.error} /> : null}
-              {workloads.data?.map((workload) => (
-                <ScenarioCard key={workload.name} workload={workload} />
+          <BuilderSection title="1. Workload">
+            {scenarios.isLoading ? <LoadingSkeleton rows={2} /> : null}
+            {scenarios.isError ? <ErrorState error={scenarios.error} /> : null}
+            <div className="grid gap-4 md:grid-cols-3">
+              {presets.map((preset) => (
+                <button
+                  key={preset.id}
+                  type="button"
+                  onClick={() => setDraft(cloneScenario(preset, "custom"))}
+                  className="panel p-4 text-left hover:border-primary focus:outline-none focus:ring-2 focus:ring-ring"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <h3 className="font-semibold">{preset.id}</h3>
+                      <p className="metadata mt-1 text-muted-foreground">{preset.mode}</p>
+                    </div>
+                    <span className="rounded-md border bg-muted px-2 py-1 text-xs">preset</span>
+                  </div>
+                  <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
+                    <div>
+                      <dt className="text-muted-foreground">Requests</dt>
+                      <dd className="font-medium">{preset.request_count}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-muted-foreground">Routing</dt>
+                      <dd className="font-medium">{preset.routing_profile.type}</dd>
+                    </div>
+                  </dl>
+                </button>
               ))}
             </div>
-          </div>
+          </BuilderSection>
 
-          <div className="panel p-4">
-            <h2 className="font-semibold">2. Select saved configuration</h2>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Saved scenarios come from the backend and can be used to create runs.
-            </p>
-            <div className="mt-4">
-              {scenarios.isLoading ? <LoadingSkeleton /> : null}
-              {scenarios.isError ? <ErrorState error={scenarios.error} /> : null}
-              {scenarios.data && scenarios.data.items.length === 0 ? (
-                <EmptyState
-                  title="No saved scenarios"
-                  detail="Create scenarios through the API to enable one-click run creation here."
-                />
-              ) : null}
-              <div className="grid gap-4 md:grid-cols-2">
-                {scenarios.data?.items.map((scenario) => (
-                  <ScenarioCard key={scenario.id} scenario={scenario} />
-                ))}
+          <form onSubmit={submit} className="space-y-4">
+            <BuilderSection title="2. Traffic">
+              <div className="grid gap-3 md:grid-cols-4">
+                <NumberField label="Requests" value={draft?.request_count} onChange={(v) => updateDraft(setDraft, { request_count: v })} />
+                <NumberField label="Concurrency" value={draft?.max_concurrency} onChange={(v) => updateDraft(setDraft, { max_concurrency: v })} />
+                <NumberField label="Rate / sec" value={draft?.rate_per_second} onChange={(v) => updateDraft(setDraft, { rate_per_second: v })} />
+                <NumberField label="Seed" value={draft?.seed} onChange={(v) => updateDraft(setDraft, { seed: v })} />
               </div>
-            </div>
-          </div>
+              <Button type="button" variant="outline" onClick={() => updateDraft(setDraft, { seed: Math.floor(Math.random() * 1_000_000) })}>
+                Generate seed
+              </Button>
+            </BuilderSection>
+
+            <BuilderSection title="3. Routing">
+              <p className="text-sm text-muted-foreground">
+                {draft?.mode === "concentrate_native"
+                  ? "Native mode sends model=auto and does not claim a selected provider unless Concentrate returns one."
+                  : "Deterministic chaos mode advances through configured routes after explicit real or simulated failures."}
+              </p>
+              <pre className="mt-3 overflow-auto rounded-md bg-muted p-3 text-xs">
+                {JSON.stringify(draft?.routing_profile ?? {}, null, 2)}
+              </pre>
+            </BuilderSection>
+
+            <BuilderSection title="4. Fault schedule">
+              <pre className="overflow-auto rounded-md bg-muted p-3 text-xs">
+                {JSON.stringify(draft?.fault_rules ?? [], null, 2)}
+              </pre>
+            </BuilderSection>
+
+            <BuilderSection title="5. SLOs">
+              <div className="grid gap-3 md:grid-cols-2">
+                <NumberField label="Recovery SLO ms" value={draft?.recovery_time_slo_ms ?? undefined} onChange={(v) => updateDraft(setDraft, { recovery_time_slo_ms: v })} />
+                <NumberField label="Latency SLO ms" value={draft?.latency_slo_ms ?? undefined} onChange={(v) => updateDraft(setDraft, { latency_slo_ms: v })} />
+              </div>
+            </BuilderSection>
+
+            <BuilderSection title="6. Review and launch">
+              <div className="grid gap-3 text-sm md:grid-cols-3">
+                <ReviewItem label="Estimated duration" value={validation ? `${(validation.estimatedDurationMs / 1000).toFixed(1)}s` : "N/A"} />
+                <ReviewItem label="Maximum gateway calls" value={validation?.maxGatewayCalls ?? "N/A"} />
+                <ReviewItem label="Mode" value={draft?.mode ?? "N/A"} />
+              </div>
+              {validation?.warnings.map((warning) => (
+                <div key={warning} className="mt-3 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+                  {warning} No dollar estimate is shown because costs depend on provider responses.
+                </div>
+              ))}
+              {validation?.errors.map((error) => (
+                <div key={error} className="mt-3 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-900">
+                  {error}
+                </div>
+              ))}
+              {saveAndLaunch.isError ? <ErrorState error={saveAndLaunch.error} /> : null}
+              <Button type="submit" disabled={!draft || Boolean(validation?.errors.length) || saveAndLaunch.isPending}>
+                Save scenario and create run
+              </Button>
+            </BuilderSection>
+          </form>
         </section>
 
         <aside className="panel p-4">
-          <h2 className="font-semibold">Configuration checklist</h2>
-          <ol className="mt-4 space-y-3 text-sm text-muted-foreground">
-            <li>1. Pick a workload fixture set.</li>
-            <li>2. Confirm routing profile and fault rules.</li>
-            <li>3. Set request rate, concurrency, seed, and SLOs.</li>
-            <li>4. Start the run and inspect the cockpit.</li>
-          </ol>
-          <Link href="/scenarios" className="mt-5 inline-flex text-sm font-medium text-primary">
-            Review scenarios
-          </Link>
+          <h2 className="font-semibold">Current draft</h2>
+          <pre className="mt-4 max-h-[44rem] overflow-auto rounded-md bg-muted p-3 text-xs">
+            {JSON.stringify(draft ?? { status: "Select a preset to begin" }, null, 2)}
+          </pre>
         </aside>
       </div>
     </div>
   );
 }
 
+function BuilderSection({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <section className="panel p-4">
+      <h2 className="font-semibold">{title}</h2>
+      <div className="mt-4 space-y-3">{children}</div>
+    </section>
+  );
+}
+
+function NumberField({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: number | undefined;
+  onChange: (value: number) => void;
+}) {
+  return (
+    <label className="text-sm">
+      <span className="font-medium">{label}</span>
+      <input
+        type="number"
+        value={value ?? ""}
+        onChange={(event) => onChange(Number(event.target.value))}
+        className="mt-2 w-full rounded-md border bg-white px-3 py-2 metadata"
+      />
+    </label>
+  );
+}
+
+function ReviewItem({ label, value }: { label: string; value: string | number }) {
+  return (
+    <div className="rounded-md border p-3">
+      <div className="text-xs text-muted-foreground">{label}</div>
+      <div className="metadata mt-1 font-semibold">{value}</div>
+    </div>
+  );
+}
+
+function updateDraft(
+  setDraft: (updater: (draft: Scenario | null) => Scenario | null) => void,
+  patch: Partial<Scenario>,
+) {
+  setDraft((draft) => (draft ? { ...draft, ...patch } : draft));
+}

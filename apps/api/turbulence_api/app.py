@@ -5,6 +5,7 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from pydantic import BaseModel
 
 from turbulence_api.api.router import api_router
 from turbulence_api.api.schemas import ProblemDetail
@@ -20,6 +21,14 @@ from turbulence_api.simulation.event_bus import EventBus
 from turbulence_api.simulation.orchestrator import SimulationOrchestrator
 from turbulence_api.simulation.store import InMemoryRunStore
 from turbulence_api.workloads.registry import build_default_registry
+
+
+class RootResponse(BaseModel):
+    service: str
+    status: str
+    version: str
+    health_endpoint: str
+    docs_url: str
 
 
 @asynccontextmanager
@@ -60,8 +69,9 @@ def create_app() -> FastAPI:
     app = FastAPI(
         title=settings.service_name,
         version=settings.version,
-        docs_url="/api/docs",
-        openapi_url="/api/openapi.json",
+        docs_url="/docs",
+        redoc_url="/redoc",
+        openapi_url="/openapi.json",
         lifespan=lifespan,
     )
 
@@ -74,6 +84,17 @@ def create_app() -> FastAPI:
     )
 
     app.include_router(api_router, prefix="/api")
+
+    @app.get("/", response_model=RootResponse, tags=["root"])
+    async def root() -> RootResponse:
+        return RootResponse(
+            service=settings.service_name,
+            status="ok",
+            version=settings.version,
+            health_endpoint="/api/health",
+            docs_url="/docs",
+        )
+
     app.add_exception_handler(ServiceError, _service_error_handler)
     app.add_exception_handler(HTTPException, _http_error_handler)
     app.add_exception_handler(RequestValidationError, _validation_error_handler)

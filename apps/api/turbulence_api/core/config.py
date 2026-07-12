@@ -24,6 +24,10 @@ class Settings(BaseSettings):
     )
     cnai_timeout_seconds: float = Field(default=30.0, validation_alias="CNAI_TIMEOUT_SECONDS")
     cnai_mode: str = Field(default="mock", validation_alias="CNAI_MODE")
+    workload_max_output_tokens: int = Field(
+        default=128,
+        validation_alias="WORKLOAD_MAX_OUTPUT_TOKENS",
+    )
 
     model_config = SettingsConfigDict(
         env_file=".env",

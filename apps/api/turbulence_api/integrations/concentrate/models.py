@@ -15,6 +15,7 @@ class ConcentrateMetadata(BaseModel):
 
 
 class JsonSchemaFormat(BaseModel):
+    type: Literal["json_schema"] = "json_schema"
     name: str
     schema_: dict[str, Any] = Field(alias="schema")
     strict: bool = True
@@ -69,4 +70,3 @@ class ConcentrateModel(BaseModel):
     id: str
     name: str | None = None
     provider: str | None = None
-

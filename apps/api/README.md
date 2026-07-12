@@ -27,6 +27,7 @@ Environment variables:
 - `CNAI_BASE_URL`: defaults to `https://api.concentrate.ai/v1`.
 - `CNAI_TIMEOUT_SECONDS`: request timeout in seconds.
 - `CNAI_MODE`: `mock` or `live`; defaults to `mock`.
+- `WORKLOAD_MAX_OUTPUT_TOKENS`: default max output token budget for workload runs.
 
 Endpoints:
 
@@ -40,3 +41,9 @@ python scripts/manual_concentrate_check.py
 ```
 
 The manual script skips without making a request when `CNAI_API_KEY` is not set.
+
+Run one deterministic workload fixture through the configured adapter:
+
+```bash
+python scripts/run_workload_fixture.py --workload support_ticket_triage --seed 7 --model mock-fast
+```

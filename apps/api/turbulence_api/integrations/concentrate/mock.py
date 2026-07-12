@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import random
+from typing import Any
 
 from turbulence_api.integrations.concentrate.models import (
     ConcentrateHealth,
@@ -37,7 +39,11 @@ class MockConcentrateClient:
         )
         rng = random.Random(fingerprint)
         response_id = f"mock-resp-{fingerprint[:16]}"
-        assistant_text = '{"ok": true, "mode": "mock"}' if request.text else "mock response"
+        assistant_text = (
+            _mock_structured_response(request)
+            if request.text
+            else "mock response"
+        )
         input_tokens = 8 + rng.randint(0, 12)
         output_tokens = min(request.max_output_tokens or 16, 4 + rng.randint(0, 8))
 
@@ -68,3 +74,65 @@ def _fingerprint(seed: int, *parts: str | None) -> str:
         digest.update(b"\0")
         digest.update((part or "").encode("utf-8"))
     return digest.hexdigest()
+
+
+def _mock_structured_response(request: ConcentrateResponseRequest) -> str:
+    format_name = _format_name(request)
+    if format_name == "support_ticket_triage_output":
+        return json.dumps(_triage_payload(str(request.input)), separators=(",", ":"))
+    return '{"ok": true, "mode": "mock"}'
+
+
+def _format_name(request: ConcentrateResponseRequest) -> str | None:
+    if not request.text or not request.text.format:
+        return None
+    if isinstance(request.text.format, dict):
+        value = request.text.format.get("name")
+        return str(value) if value else None
+    return request.text.format.name
+
+
+def _triage_payload(prompt: str) -> dict[str, Any]:
+    text = prompt.casefold()
+    if any(term in text for term in ["unknown ssh", "former employee", "exposed", "token"]):
+        category = "security"
+        priority = "critical"
+        requires_human = True
+    elif any(term in text for term in ["invoice", "charge", "refund", "billing", "card", "vat"]):
+        category = "billing"
+        priority = "medium"
+        requires_human = True
+    elif any(term in text for term in ["500", "webhook", "query timeout", "sdk", "chart"]):
+        category = "technical"
+        priority = (
+            "high"
+            if any(term in text for term in ["500", "checkout", "webhook"])
+            else "medium"
+        )
+        requires_human = True
+    elif any(
+        term in text
+        for term in ["admin account", "account owner", "workspace", "authenticator"]
+    ):
+        category = "account"
+        priority = "high" if "authenticator" in text else "medium"
+        requires_human = True
+    else:
+        category = "other"
+        priority = "low"
+        requires_human = False
+
+    return {
+        "category": category,
+        "priority": priority,
+        "summary": _extract_ticket_summary(prompt),
+        "confidence": 0.82,
+        "requires_human": requires_human,
+    }
+
+
+def _extract_ticket_summary(prompt: str) -> str:
+    marker = "Ticket:\n"
+    if marker in prompt:
+        return prompt.split(marker, maxsplit=1)[1].strip()
+    return prompt[:200].strip()

@@ -116,7 +116,7 @@ SSE behavior:
 
 ### Metrics and Reports
 
-`MetricsAggregator` computes incremental snapshots for the live UI from the stored run, requests, attempts, and persisted events. `PostFlightReportService` wraps a final snapshot with run metadata after the run is terminal. Final narrative reporting is intentionally not implemented yet.
+`MetricsAggregator` computes incremental snapshots for the live UI from the stored run, requests, attempts, and persisted events. `PostFlightReportService` wraps a final snapshot with run metadata after the run is terminal and adds deterministic post-flight analysis: executive verdict, incident timeline, route analysis, failure analysis, and rule-based recommendations.
 
 Unknown upstream values remain `null`. Missing cost, missing token counts, missing latency samples, or missing validation results are never interpreted as zero.
 
@@ -160,6 +160,21 @@ Resilience score is transparent and ranges from 0 to 100:
 When a component is not applicable, it is excluded and recorded with a reason. Applicable components are reweighted proportionally: `sum(earned applicable points) / sum(max applicable points) * 100`.
 
 `CompareRunsService` compares two metric snapshots and returns absolute differences plus percentage differences where the baseline value is numeric and non-zero.
+
+Post-flight verdicts are deterministic and threshold-based:
+
+- `production_ready`: run state is `completed`, availability is at least 99%, correctness is at least 95%, no unresolved fatal error exists, and no degradation signals were measured.
+- `degraded_but_recovered`: run state is `completed`, availability is greater than zero, and at least one degradation signal occurred, including failed requests, fallback use, validation degradation, simulated faults, real errors, or p95 latency above SLO.
+- `unreliable`: run state is `failed`, a fatal run error exists, availability is below 94%, or correctness is below 95%.
+- `inconclusive`: run is cancelled, required metrics are missing, no logical request completed successfully, or the result does not fit a stronger verdict.
+
+The report never uses an LLM for the deterministic verdict. Optional AI incident analysis is currently marked unavailable; when added, it must remain secondary to measured metrics and deterministic recommendations.
+
+Comparison direction is deterministic:
+
+- Higher is better for resilience score, availability, correctness, schema validity, fallback recovery, and successful requests.
+- Lower is better for p50/p95 latency, time to recovery, failed requests, real errors, simulated errors, total cost, and cost per successful request.
+- Percentage differences are omitted when the baseline is zero or unknown.
 
 ### Workloads
 

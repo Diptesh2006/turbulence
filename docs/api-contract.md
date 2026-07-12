@@ -175,7 +175,25 @@ Server-Sent Events stream. Event ids are sequence numbers. `Last-Event-ID` repla
 
 `GET /api/runs/{id}/report`
 
-Returns the post-flight report metrics for the run.
+Returns the post-flight report for the run. The report includes:
+
+- run metadata: run id, scenario id, run state, mode, created and updated timestamps
+- deterministic executive verdict
+- metrics snapshot and resilience score breakdown
+- incident timeline
+- route analysis
+- failure analysis
+- deterministic recommendations
+- optional AI analysis status
+
+Executive verdicts are deterministic and are never LLM-judged:
+
+- `production_ready`: run is `completed`, availability is at least `99%`, correctness is at least `95%`, no fatal error exists, and no degradation signals were measured.
+- `degraded_but_recovered`: run is `completed`, availability is greater than zero, and fallback, validation, fault, error, failed request, or latency degradation occurred.
+- `unreliable`: run is `failed`, a fatal run error exists, availability is below `94%`, or correctness is below `95%`.
+- `inconclusive`: run is cancelled, required metrics are missing, or no logical request completed successfully.
+
+Unknown costs and token values remain `null`. Simulated provider outage injections are labelled simulated and must not be described as real upstream incidents.
 
 ## Comparisons
 
@@ -189,6 +207,26 @@ Compares two runs by their metric snapshots.
   "candidate_run_id": "run-b"
 }
 ```
+
+Comparison differences include before, after, absolute difference, percentage difference, metric direction, and change kind. Percentage difference is `null` when the baseline is zero or unknown.
+
+Higher is better for:
+
+- resilience score
+- availability
+- correctness
+- schema validity
+- fallback recovery
+- successful requests
+
+Lower is better for:
+
+- p50 and p95 latency
+- time to recovery
+- failed requests
+- real and simulated errors
+- total cost
+- cost per successful request
 
 ## Concentrate Integration
 

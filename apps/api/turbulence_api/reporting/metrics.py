@@ -26,9 +26,7 @@ class MetricsAggregator:
         total_attempts = sum(len(request.attempts) for request in run.requests)
         successful_requests = sum(1 for request in run.requests if request.state == "completed")
         failed_requests = sum(1 for request in run.requests if request.state == "failed")
-        fallback_triggered = [
-            request for request in run.requests if _has_fallback_attempt(request)
-        ]
+        fallback_triggered = [request for request in run.requests if _has_fallback_attempt(request)]
         fallback_successes = [
             request for request in fallback_triggered if request.state == "completed"
         ]
@@ -75,6 +73,7 @@ class MetricsAggregator:
             p95_upstream_latency_ms=_percentile(upstream_latencies, 95),
             total_injected_latency_ms=sum(injected_latencies) if injected_latencies else None,
             tokens=token_totals,
+            mock_response_count=_mock_response_count(run, events),
             total_cost=total_cost,
             cost_per_successful_request=(
                 total_cost / successful_requests
@@ -141,6 +140,31 @@ def _token_totals(attempts: list[AttemptRecord]) -> TokenTotals:
     )
 
 
+def _mock_response_count(
+    run: SimulationRun,
+    events: list[SimulationEvent],
+) -> int | None:
+    event_mock_values = [
+        event.payload.get("is_mock")
+        for event in events
+        if event.type == "gateway.response_received"
+    ]
+    if any(value is True for value in event_mock_values):
+        return sum(1 for value in event_mock_values if value is True)
+
+    attempts = _attempts(run)
+    explicit_provider_count = sum(
+        1 for attempt in attempts if attempt.actual_provider == "mock" or attempt.provider == "mock"
+    )
+    if explicit_provider_count:
+        return explicit_provider_count
+    if event_mock_values or any(
+        attempt.actual_provider is not None or attempt.provider is not None for attempt in attempts
+    ):
+        return 0
+    return None
+
+
 def _real_error_count(run: SimulationRun) -> int:
     return sum(1 for attempt in _attempts(run) if attempt.errors)
 
@@ -151,8 +175,7 @@ def _simulated_error_count(run: SimulationRun) -> int:
         count += sum(
             1
             for provenance in attempt.fault_provenance
-            if provenance.simulated_status_code is not None
-            or provenance.corrupted_response
+            if provenance.simulated_status_code is not None or provenance.corrupted_response
         )
     return count
 
@@ -334,4 +357,3 @@ def _excluded(name: str, max_points: float, reason: str) -> ResilienceComponentS
         excluded=True,
         reason=reason,
     )
-

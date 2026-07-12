@@ -61,6 +61,7 @@ def test_partial_run_does_not_interpret_missing_upstream_values_as_zero() -> Non
 
 def test_successful_run_metrics_and_report() -> None:
     run = _run("success", latency_slo_ms=500)
+    run.state = "completed"
     run.metrics.total_requests = 1
     run.requests.append(_successful_request("req-1", upstream_latency_ms=25))
     events = _request_events(run.id, "req-1", duration_ms=100)
@@ -84,10 +85,14 @@ def test_successful_run_metrics_and_report() -> None:
     assert snapshot.cost_per_successful_request == 0.03
     assert snapshot.requests_by_actual_model_provider == {"mock-fast/mock": 1}
     assert report.metrics.run_id == run.id
+    assert report.executive_verdict.verdict == "production_ready"
+    assert "availability" in report.executive_verdict.explanation
+    assert [item.code for item in report.recommendations] == ["baseline_healthy"]
 
 
 def test_degraded_run_tracks_fallback_recovery_and_resilience_reweighting() -> None:
     run = _run("degraded", recovery_time_slo_ms=1000, latency_slo_ms=1000)
+    run.state = "completed"
     run.metrics.total_requests = 1
     request = _successful_request("req-1", upstream_latency_ms=30)
     request.attempts.insert(
@@ -128,6 +133,15 @@ def test_degraded_run_tracks_fallback_recovery_and_resilience_reweighting() -> N
     assert snapshot.route_attempt_distribution["0:primary/primary"] == 1
     assert snapshot.route_attempt_distribution["1:mock-fast/mock"] == 1
     assert snapshot.resilience_score.score == 100
+    assert snapshot.resilience_score.components[2].excluded is False
+    report = PostFlightReportService().create_report(run, events)
+    assert report.executive_verdict.verdict == "degraded_but_recovered"
+    assert report.incident_timeline[0].source == "simulated"
+    assert report.route_analysis[1].simulator_managed_fallback is True
+    recommendation_codes = {item.code for item in report.recommendations}
+    assert "baseline_healthy" not in recommendation_codes
+    assert "fallback_recovered_successfully" in recommendation_codes
+    assert "simulated_faults_present" in recommendation_codes
 
 
 def test_completely_failed_run_metrics() -> None:
@@ -168,6 +182,53 @@ def test_completely_failed_run_metrics() -> None:
     assert snapshot.total_cost is None
 
 
+def test_fatal_failed_run_verdict_is_unreliable() -> None:
+    run = _run("fatal")
+    run.state = "failed"
+    run.error = "database write failed"
+
+    report = PostFlightReportService().create_report(run, [])
+
+    assert report.executive_verdict.verdict == "unreliable"
+
+
+def test_cancelled_run_verdict_is_inconclusive() -> None:
+    run = _run("cancelled")
+    run.state = "cancelled"
+
+    report = PostFlightReportService().create_report(run, [])
+
+    assert report.executive_verdict.verdict == "inconclusive"
+
+
+def test_no_fallback_triggered_excludes_and_reweights_fallback_component() -> None:
+    run = _run("no-fallback", latency_slo_ms=500)
+    run.state = "completed"
+    run.metrics.total_requests = 1
+    run.requests.append(_successful_request("req-1", upstream_latency_ms=25))
+    events = _request_events(run.id, "req-1", duration_ms=100)
+
+    snapshot = MetricsAggregator().snapshot(run, events)
+
+    assert "fallback_recovery" in snapshot.resilience_score.excluded_components
+    assert snapshot.resilience_score.score == 100
+
+
+def test_unknown_cost_remains_null_in_report() -> None:
+    run = _run("unknown-cost")
+    run.state = "completed"
+    run.metrics.total_requests = 1
+    request = _successful_request("req-1", upstream_latency_ms=25)
+    request.attempts[0].cost_total = None
+    run.requests.append(request)
+
+    report = PostFlightReportService().create_report(run, [])
+
+    assert report.metrics.total_cost is None
+    assert report.metrics.cost_per_successful_request is None
+    assert any(item.code == "cost_unknown" for item in report.recommendations)
+
+
 def test_compare_runs_returns_absolute_and_percentage_differences() -> None:
     baseline = MetricsAggregator().snapshot(
         _run_with_requests("baseline", successful=1, failed=1),
@@ -182,7 +243,56 @@ def test_compare_runs_returns_absolute_and_percentage_differences() -> None:
 
     assert comparison.differences["successful_requests"].absolute_difference == 1
     assert comparison.differences["successful_requests"].percentage_difference == 100
+    assert comparison.differences["successful_requests"].change_kind == "improvement"
     assert comparison.differences["failed_requests"].absolute_difference == -1
+    assert comparison.differences["failed_requests"].change_kind == "improvement"
+
+
+def test_comparison_skips_percentage_when_baseline_is_zero_or_null() -> None:
+    baseline = MetricsAggregator().snapshot(
+        _run_with_requests("baseline", successful=0, failed=0),
+        [],
+    )
+    candidate = MetricsAggregator().snapshot(
+        _run_with_requests("candidate", successful=1, failed=0),
+        [],
+    )
+
+    comparison = CompareRunsService().compare(baseline, candidate)
+
+    assert comparison.differences["successful_requests"].percentage_difference is None
+    assert comparison.differences["availability_percentage"].percentage_difference is None
+    assert comparison.differences["total_cost"].absolute_difference is None
+    assert comparison.differences["total_cost"].change_kind == "no_data"
+
+
+def test_comparison_treats_lower_latency_and_higher_correctness_as_improvements() -> None:
+    baseline_run = _run_with_requests("baseline", successful=1, failed=1)
+    baseline_run.requests[1].validation_result = {
+        "score": {
+            "schema_valid": True,
+            "category_correct": False,
+            "priority_correct": False,
+            "summary_keyword_coverage": 0,
+            "overall_correct": False,
+        }
+    }
+    baseline = MetricsAggregator().snapshot(
+        baseline_run,
+        _request_events("baseline", "req-s-0", duration_ms=200),
+    )
+    candidate = MetricsAggregator().snapshot(
+        _run_with_requests("candidate", successful=2, failed=0),
+        [
+            *_request_events("candidate", "req-s-0", duration_ms=100),
+            *_request_events("candidate", "req-s-1", duration_ms=100),
+        ],
+    )
+
+    comparison = CompareRunsService().compare(baseline, candidate)
+
+    assert comparison.differences["p95_end_to_end_latency_ms"].change_kind == "improvement"
+    assert comparison.differences["overall_correctness_rate"].change_kind == "improvement"
 
 
 def _run(

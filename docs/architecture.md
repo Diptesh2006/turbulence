@@ -33,6 +33,20 @@ The orchestration layer will generate deterministic workloads, apply seeded faul
 
 Routing and fault-injection primitives exist as domain modules, but they do not yet form a full simulation engine.
 
+`SimulationOrchestrator` in `turbulence_api.simulation.orchestrator` is the first asynchronous execution layer. It loads a scenario, selects workload fixtures deterministically from the scenario seed, paces request generation by `rate_per_second`, enforces bounded concurrency with an asyncio semaphore, selects routes, applies pre-call and post-response faults, calls Concentrate only when a pre-call fault does not block the attempt, validates/scored outputs locally, advances fallback routes according to policy, persists in-process request/attempt/event records, updates metrics after each completed request, and supports cooperative cancellation.
+
+The run state machine is strict:
+
+```text
+created -> running -> completed
+created -> running -> failed
+created -> running -> cancelling -> cancelled
+```
+
+Invalid transitions raise an error. On cancellation or fatal failure, queued/running requests and started attempts are marked `abandoned`.
+
+This is still not final reporting logic. The current persistence implementation is in-process memory for orchestration and SSE replay; durable database tables can be added when the reporting model is designed.
+
 ### Routing Policies
 
 Routing policies live in `turbulence_api.domain.routing`.
@@ -72,6 +86,33 @@ MVP fault types:
 - `malformed_json`: post-response simulated fault. Corrupts a copy of the response before local validation and preserves the original upstream response internally for auditability.
 
 Every affected attempt records fault provenance with `source="simulated"`. Domain events `fault.activated` and `fault.cleared` are also marked with `source="simulated"`. Injected faults must never be described as actual provider incidents.
+
+### Event Bus and SSE
+
+The in-process `EventBus` uses asyncio queues per subscribed run. Events are persisted before publication so disconnected clients do not affect simulation execution.
+
+Each `SimulationEvent` has:
+
+- monotonic `sequence`
+- event `type`
+- `source` of `real`, `simulated`, or `system`
+- timestamp
+- run id
+- structured payload
+
+The run event stream is exposed at:
+
+```text
+GET /api/runs/{run_id}/events
+```
+
+SSE behavior:
+
+- SSE event IDs use the persisted sequence number.
+- `Last-Event-ID` replays persisted events after that sequence.
+- Heartbeats are sent as SSE comments while waiting for new events.
+- The stream closes after `run.completed`, `run.failed`, or `run.cancelled`.
+- Client disconnects close the subscription only; they do not stop the simulation.
 
 ### Workloads
 

@@ -15,6 +15,22 @@ export interface ResilienceScore {
   excluded_components: string[];
 }
 
+export type RiskSeverity = "nominal" | "watch" | "critical";
+
+export interface RiskSignal {
+  code: string;
+  label: string;
+  detail: string;
+  severity: Exclude<RiskSeverity, "nominal">;
+}
+
+export interface RiskAssessment {
+  severity: RiskSeverity;
+  label: string;
+  summary: string;
+  signals: RiskSignal[];
+}
+
 export interface DerivedMetrics {
   total_logical_requests: number;
   total_attempts: number;
@@ -40,10 +56,13 @@ export interface DerivedMetrics {
   cost_per_successful_request: number | null;
   time_to_recovery_ms: number | null;
   resilience_score: ResilienceScore;
+  risk_assessment: RiskAssessment;
   requests_by_actual_model_provider: Record<string, number>;
   error_distribution_by_type: Record<string, number>;
   route_attempt_distribution: Record<string, number>;
 }
+
+type MetricsForRisk = Omit<DerivedMetrics, "risk_assessment">;
 
 function percent(numerator: number, denominator: number): number | null {
   if (denominator === 0) return null;
@@ -202,7 +221,7 @@ export function computeMetrics(run: Run, events: SimulationEvent[]): DerivedMetr
     validations.length
   );
 
-  const snapshot: Omit<DerivedMetrics, "resilience_score"> = {
+  const snapshot: Omit<DerivedMetrics, "resilience_score" | "risk_assessment"> = {
     total_logical_requests: total_requests,
     total_attempts,
     successful_requests,
@@ -239,15 +258,139 @@ export function computeMetrics(run: Run, events: SimulationEvent[]): DerivedMetr
     route_attempt_distribution,
   };
 
-  const resilience_score = computeResilienceScore(run, snapshot as DerivedMetrics);
+  const resilience_score = computeResilienceScore(run, snapshot);
+  const risk_assessment = assessRunRisk(run, {
+    ...snapshot,
+    resilience_score,
+  });
 
   return {
     ...snapshot,
     resilience_score,
-  } as DerivedMetrics;
+    risk_assessment,
+  };
 }
 
-function computeResilienceScore(run: Run, snapshot: DerivedMetrics): ResilienceScore {
+export function assessRunRisk(run: Run, metrics: MetricsForRisk): RiskAssessment {
+  const signals: RiskSignal[] = [];
+  const scenario = run.scenario;
+
+  if (metrics.availability_percentage !== null && metrics.availability_percentage < 99) {
+    signals.push({
+      code: "availability_below_target",
+      label: "Availability below target",
+      detail: `${metrics.availability_percentage.toFixed(1)}% availability observed against a 99.0% target.`,
+      severity: metrics.availability_percentage < 90 ? "critical" : "watch",
+    });
+  }
+
+  if (metrics.overall_correctness_rate !== null && metrics.overall_correctness_rate < 95) {
+    signals.push({
+      code: "correctness_below_target",
+      label: "Correctness below target",
+      detail: `${metrics.overall_correctness_rate.toFixed(1)}% correctness observed against a 95.0% target.`,
+      severity: metrics.overall_correctness_rate < 85 ? "critical" : "watch",
+    });
+  }
+
+  if (
+    scenario.latency_slo_ms !== null &&
+    scenario.latency_slo_ms !== undefined &&
+    metrics.p95_end_to_end_latency_ms !== null &&
+    metrics.p95_end_to_end_latency_ms > scenario.latency_slo_ms
+  ) {
+    const overByMs = metrics.p95_end_to_end_latency_ms - scenario.latency_slo_ms;
+    signals.push({
+      code: "latency_slo_breach",
+      label: "p95 latency SLO breach",
+      detail: `p95 latency is ${overByMs.toFixed(0)}ms over the configured ${scenario.latency_slo_ms}ms SLO.`,
+      severity: metrics.p95_end_to_end_latency_ms > scenario.latency_slo_ms * 1.5 ? "critical" : "watch",
+    });
+  }
+
+  if (
+    scenario.recovery_time_slo_ms !== null &&
+    scenario.recovery_time_slo_ms !== undefined &&
+    metrics.time_to_recovery_ms !== null &&
+    metrics.time_to_recovery_ms > scenario.recovery_time_slo_ms
+  ) {
+    const overByMs = metrics.time_to_recovery_ms - scenario.recovery_time_slo_ms;
+    signals.push({
+      code: "recovery_slo_breach",
+      label: "Recovery SLO breach",
+      detail: `Fallback recovery took ${overByMs.toFixed(0)}ms longer than the configured SLO.`,
+      severity: metrics.time_to_recovery_ms > scenario.recovery_time_slo_ms * 1.5 ? "critical" : "watch",
+    });
+  }
+
+  if (metrics.fallback_triggered_requests > 0 && metrics.fallback_recovery_rate === 0) {
+    signals.push({
+      code: "fallback_not_recovering",
+      label: "Fallback did not recover",
+      detail: `${metrics.fallback_triggered_requests} fallback-triggered request(s) produced no successful recovery.`,
+      severity: "critical",
+    });
+  } else if (
+    metrics.fallback_recovery_rate !== null &&
+    metrics.fallback_recovery_rate < 100 &&
+    metrics.fallback_triggered_requests > 0
+  ) {
+    signals.push({
+      code: "partial_fallback_recovery",
+      label: "Partial fallback recovery",
+      detail: `${metrics.fallback_recovery_rate.toFixed(1)}% of fallback-triggered requests recovered successfully.`,
+      severity: "watch",
+    });
+  }
+
+  if (metrics.real_error_count > 0) {
+    signals.push({
+      code: "real_gateway_errors",
+      label: "Real gateway errors",
+      detail: `${metrics.real_error_count} attempt(s) reported real gateway errors.`,
+      severity: "critical",
+    });
+  }
+
+  if (metrics.resilience_score.score !== null && metrics.resilience_score.score < 70) {
+    signals.push({
+      code: "low_resilience_score",
+      label: "Low resilience score",
+      detail: `Composite resilience score is ${metrics.resilience_score.score.toFixed(0)}/100.`,
+      severity: metrics.resilience_score.score < 50 ? "critical" : "watch",
+    });
+  }
+
+  const severity = signals.some((signal) => signal.severity === "critical")
+    ? "critical"
+    : signals.length > 0
+      ? "watch"
+      : "nominal";
+
+  if (severity === "nominal") {
+    return {
+      severity,
+      label: "Nominal",
+      summary: "No operational risk signals are currently above the configured thresholds.",
+      signals,
+    };
+  }
+
+  return {
+    severity,
+    label: severity === "critical" ? "Critical" : "Watch",
+    summary:
+      severity === "critical"
+        ? "One or more signals indicate production-blocking reliability risk."
+        : "The run is usable for analysis but has reliability signals to review.",
+    signals,
+  };
+}
+
+function computeResilienceScore(
+  run: Run,
+  snapshot: Omit<DerivedMetrics, "resilience_score" | "risk_assessment">,
+): ResilienceScore {
   const components: ResilienceComponentScore[] = [];
 
   // 1. Availability

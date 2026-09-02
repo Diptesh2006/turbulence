@@ -232,6 +232,154 @@ describe("cockpit-reducer & helpers", () => {
     expect(metrics.cost_per_successful_request).toBeNull();
   });
 
+  it("returns nominal operational risk when live metrics stay within thresholds", () => {
+    const healthyRun: Run = {
+      ...initialRun,
+      state: "completed",
+      requests: [
+        {
+          id: "req-1",
+          fixture_id: "fix-1",
+          state: "completed",
+          attempts: [
+            {
+              id: "att-1",
+              request_id: "req-1",
+              index: 0,
+              model: "mock-fast",
+              provider: "mock",
+              actual_model: "mock-fast",
+              actual_provider: "mock",
+              state: "completed",
+              simulator_managed_fallback: false,
+              validation_passed: true,
+              upstream_latency_ms: 200,
+              injected_latency_ms: 0,
+              errors: [],
+              fault_provenance: [],
+            },
+          ],
+          validation_result: {
+            score: {
+              schema_valid: true,
+              category_correct: true,
+              priority_correct: true,
+              summary_keyword_coverage: 1,
+              overall_correct: true,
+            },
+          },
+        },
+      ],
+      metrics: { ...initialRun.metrics, total_requests: 1, completed_requests: 1 },
+    };
+
+    const metrics = computeMetrics(healthyRun, [
+      {
+        sequence: 1,
+        type: "request.queued",
+        source: "system",
+        timestamp: "2026-07-12T06:00:00Z",
+        run_id: "run-123",
+        payload: { request_id: "req-1" },
+      },
+      {
+        sequence: 2,
+        type: "request.completed",
+        source: "system",
+        timestamp: "2026-07-12T06:00:00.500Z",
+        run_id: "run-123",
+        payload: { request_id: "req-1" },
+      },
+    ]);
+
+    expect(metrics.risk_assessment.severity).toBe("nominal");
+    expect(metrics.risk_assessment.signals).toHaveLength(0);
+  });
+
+  it("surfaces critical operational risk for failed fallback recovery and poor outcomes", () => {
+    const riskyRun: Run = {
+      ...initialRun,
+      state: "completed",
+      requests: [
+        {
+          id: "req-1",
+          fixture_id: "fix-1",
+          state: "failed",
+          attempts: [
+            {
+              id: "att-1",
+              request_id: "req-1",
+              index: 0,
+              model: "mock-fast",
+              provider: "mock",
+              state: "failed",
+              simulator_managed_fallback: false,
+              validation_passed: false,
+              upstream_latency_ms: 1200,
+              injected_latency_ms: 0,
+              errors: ["provider unavailable"],
+              fault_provenance: [],
+            },
+            {
+              id: "att-2",
+              request_id: "req-1",
+              index: 1,
+              model: "mock-slow",
+              provider: "mock",
+              state: "failed",
+              simulator_managed_fallback: true,
+              validation_passed: false,
+              upstream_latency_ms: 1600,
+              injected_latency_ms: 0,
+              errors: [],
+              fault_provenance: [],
+            },
+          ],
+          validation_result: {
+            score: {
+              schema_valid: true,
+              category_correct: false,
+              priority_correct: false,
+              summary_keyword_coverage: 0,
+              overall_correct: false,
+            },
+          },
+        },
+      ],
+      metrics: { ...initialRun.metrics, total_requests: 1, failed_requests: 1 },
+    };
+
+    const metrics = computeMetrics(riskyRun, [
+      {
+        sequence: 1,
+        type: "request.queued",
+        source: "system",
+        timestamp: "2026-07-12T06:00:00Z",
+        run_id: "run-123",
+        payload: { request_id: "req-1" },
+      },
+      {
+        sequence: 2,
+        type: "request.completed",
+        source: "system",
+        timestamp: "2026-07-12T06:00:02Z",
+        run_id: "run-123",
+        payload: { request_id: "req-1" },
+      },
+    ]);
+
+    expect(metrics.risk_assessment.severity).toBe("critical");
+    expect(metrics.risk_assessment.signals.map((signal) => signal.code)).toEqual(
+      expect.arrayContaining([
+        "availability_below_target",
+        "correctness_below_target",
+        "latency_slo_breach",
+        "fallback_not_recovering",
+        "real_gateway_errors",
+      ]),
+    );
+  });
+
   it("tracks SSE status transitions for reconnecting and terminal streams", () => {
     const initialState: CockpitState = {
       run: initialRun,

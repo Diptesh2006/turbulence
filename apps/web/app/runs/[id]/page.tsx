@@ -906,6 +906,59 @@ export default function RunCockpitPage({ params }: { params: { id: string } }) {
 
         {/* Right Column: Request Inspector (span 1) */}
         <div className="space-y-6">
+          <section className="panel p-4">
+            <h3 className="font-semibold text-sm border-b pb-2 flex items-center justify-between">
+              <span>Operational Risk</span>
+              <span
+                className={`inline-flex rounded border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${
+                  metrics.risk_assessment.severity === "critical"
+                    ? "border-red-200 bg-red-50 text-red-700"
+                    : metrics.risk_assessment.severity === "watch"
+                      ? "border-amber-200 bg-amber-50 text-amber-800"
+                      : "border-emerald-200 bg-emerald-50 text-emerald-700"
+                }`}
+              >
+                {metrics.risk_assessment.label}
+              </span>
+            </h3>
+            <p className="mt-3 text-xs text-muted-foreground">
+              {metrics.risk_assessment.summary}
+            </p>
+            {metrics.risk_assessment.signals.length > 0 ? (
+              <div className="mt-4 space-y-2">
+                {metrics.risk_assessment.signals.slice(0, 4).map((signal) => (
+                  <div
+                    key={signal.code}
+                    className={`rounded-md border p-3 text-xs ${
+                      signal.severity === "critical"
+                        ? "border-red-100 bg-red-50/60 text-red-900"
+                        : "border-amber-100 bg-amber-50/60 text-amber-900"
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 font-semibold">
+                      <AlertTriangle
+                        className={`h-3.5 w-3.5 ${
+                          signal.severity === "critical" ? "text-red-600" : "text-amber-600"
+                        }`}
+                      />
+                      {signal.label}
+                    </div>
+                    <div className="mt-1 text-[11px] leading-5">{signal.detail}</div>
+                  </div>
+                ))}
+                {metrics.risk_assessment.signals.length > 4 ? (
+                  <div className="metadata text-muted-foreground">
+                    +{metrics.risk_assessment.signals.length - 4} more signal(s)
+                  </div>
+                ) : null}
+              </div>
+            ) : (
+              <div className="mt-4 rounded-md border border-emerald-100 bg-emerald-50/50 p-3 text-xs text-emerald-800">
+                All monitored reliability thresholds are currently within range.
+              </div>
+            )}
+          </section>
+
           <section className="panel p-4 space-y-4">
             <h3 className="font-semibold text-sm border-b pb-2 flex items-center justify-between">
               <span>Logical Request Inspector</span>

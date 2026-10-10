@@ -43,6 +43,29 @@ def test_catalog_endpoints() -> None:
     }
 
 
+def test_agent_safety_scenarios_runs_and_replay() -> None:
+    with TestClient(create_app()) as client:
+        scenarios = client.get("/api/agent-safety/scenarios")
+        policies = client.get("/api/agent-safety/policies")
+        created = client.post(
+            "/api/agent-safety/runs",
+            json={"scenario_id": "agent-destructive-command", "seed": 8},
+        )
+        run_id = created.json()["id"]
+        replay = client.post(f"/api/agent-safety/runs/{run_id}/replay")
+        fetched = client.get(f"/api/agent-safety/runs/{run_id}")
+
+    assert scenarios.status_code == 200
+    assert scenarios.json()["source"] == "simulated"
+    assert len(scenarios.json()["items"]) >= 5
+    assert policies.status_code == 200
+    assert created.status_code == 201
+    assert created.json()["actions"][0]["simulated_result"]["executed"] is False
+    assert replay.status_code == 201
+    assert replay.json()["seed"] == 8
+    assert replay.json()["actions"][0]["decision"] == fetched.json()["actions"][0]["decision"]
+
+
 def test_scenario_crud_and_delete_safety() -> None:
     with TestClient(create_app()) as client:
         create = client.post("/api/scenarios", json=scenario_payload())

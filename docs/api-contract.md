@@ -270,7 +270,7 @@ Sends one short structured-output request only in live mode. It never returns th
 
 ## Notes
 
-- No authentication, billing, Redis, Celery, or Kubernetes are part of this API.
+- No end-user accounts, billing, Redis, Celery, or Kubernetes are part of this API. The invite-only hosted demo adds a shared web passcode and a server-to-server token; neither provides per-user identity or authorization.
 - Provider failures, costs, tokens, and routing decisions are never fabricated.
 - Injected faults are labeled `simulated`.
 - Concentrate-specific payload assumptions remain behind the Concentrate adapter.

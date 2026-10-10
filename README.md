@@ -35,10 +35,10 @@ docs/
 ## Requirements
 
 - Python 3.13+
-- Node.js 20+
+- Node.js 20.9+
 - npm
 
-No Redis, Celery, authentication, billing, or Kubernetes are required.
+No Redis, Celery, user accounts, billing, or Kubernetes are required for local development or the invite-only demo.
 
 ## Backend Setup
 
@@ -110,13 +110,26 @@ CI runs the backend lint/tests and the frontend tests, type check, and productio
 
 The current application is a pre-release test bench, not a multi-user production service:
 
-- The API has no authentication or tenant isolation. Anyone who can reach it can call its read and write endpoints; CORS does not restrict non-browser clients.
+- Demo access uses one shared invite code and a server-held API token, not individual accounts or tenant isolation. Invitees share access to the same runs and policies; `/api/health` is public for hosting health checks.
 - Run history, simulation events, scenarios, and Agent Safety policies are held in process memory. They disappear on restart and are not shared between API instances. The configured SQLAlchemy database is not yet wired into these stores.
 - Live provider mode uses the server's configured provider credential. There are no per-user quotas, billing, or spend attribution.
 
-Do not expose this API to unrestricted real users or enable shared live-provider access until persistence, authentication/authorization, tenant isolation, and usage controls are implemented and tested. An invite-only mock demo is a lower-risk interim release, but its data is temporary and the API still needs an access restriction at the hosting layer.
+Do not expose this API to unrestricted real users or enable shared live-provider access until persistence, individual authentication/authorization, tenant isolation, and usage controls are implemented and tested. The invite-only mock setup is only suitable for a small, trusted demo group; its data is temporary and shared among invitees.
 
-For a Vercel + Render deployment, configure `NEXT_PUBLIC_API_BASE_URL` in the Vercel project to the HTTPS API origin. Configure `CORS_ORIGINS` on the API to the exact HTTPS frontend origin (comma-separated if there are multiple). Keep `CNAI_MODE=mock` for a demo. If live mode is later enabled, put `CNAI_API_KEY` only in the API host's secret configuration; `NEXT_PUBLIC_*` variables are delivered to browsers and must never contain credentials.
+For the invite-only Vercel + Render demo, the web app requires `DEMO_ACCESS_CODE` and proxies API requests server-side. Configure `TURBULENCE_API_URL` and `TURBULENCE_API_TOKEN` as server-only Vercel environment variables. Set the same token as `API_ACCESS_TOKEN` on Render. Keep `CNAI_MODE=mock`; never put provider credentials or the internal API token in `NEXT_PUBLIC_*` variables. Leave `NEXT_PUBLIC_API_BASE_URL` unset in Vercel so browser requests use the protected same-origin proxy.
+
+Generate separate high-entropy values for the invite code, session-signing secret, and API token. Share the invite code only with demo participants; rotating it immediately invalidates existing sessions. This is one shared passcode, not per-user accounts or an authorization system; it does not provide individual identity or audit attribution.
+
+### Vercel + Render Demo Setup
+
+1. In Render, create a Blueprint from this repository and use the checked-in `render.yaml`. The API is configured for mock mode and exposes `/api/health` for its health check. The free web service may sleep when idle, so its first request can be delayed.
+2. After the Render API is created, copy its generated `API_ACCESS_TOKEN` value from the service environment settings.
+3. In Vercel, import the same repository and set the project Root Directory to `apps/web`. Add these Production environment variables: `TURBULENCE_API_URL` (the Render service HTTPS origin), `TURBULENCE_API_TOKEN` (the Render token copied above), `DEMO_ACCESS_CODE` (a separate, high-entropy code to share with invitees), and `DEMO_SESSION_SECRET` (another separate secret used to sign 12-hour sessions). Generate the two Vercel secrets with `openssl rand -hex 32`.
+4. Keep `NEXT_PUBLIC_API_BASE_URL` unset. Redeploy Vercel after saving the environment variables.
+5. In the Vercel project Firewall, create and publish a rate-limit rule with the `@vercel/firewall` condition and ID `demo-login`, using a fixed 60-second window, a limit of 5 requests per source IP, and a 429 response. Counters are per region. The invite endpoint fails closed until that rule is active.
+6. Open the Vercel production URL, enter the invite code, then test `/agent-safety` and a scenario run. Direct API routes require the internal token; `/api/health` remains public for Render health checks.
+
+The API token and invite code are separate secrets. Rotate both if either is disclosed. Do not enable live provider mode for this demo. Runs and policy changes are temporary and shared among invitees until the API restarts; this setup is for a small, trusted demo group, not customer accounts or durable customer data.
 
 Use separate preview/staging and production environments. Before promoting a release, verify the health endpoint, frontend-to-API requests, database backup/restore (once persistence is in use), and the provider mode and spend limits.
 

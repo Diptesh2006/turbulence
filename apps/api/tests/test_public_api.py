@@ -67,6 +67,10 @@ def test_agent_safety_scenarios_runs_and_replay() -> None:
     assert policy_response.status_code == 200
     assert created.status_code == 201
     assert created.json()["actions"][0]["simulated_result"]["executed"] is False
+    events = created.json()["events"]
+    assert events[0]["type"] == "run.created"
+    assert events[-1]["type"] == "run.completed"
+    assert all(event["source"] == "simulated" for event in events)
     assert replay.status_code == 201
     assert replay.json()["seed"] == 8
     assert replay.json()["actions"][0]["decision"] == fetched.json()["actions"][0]["decision"]

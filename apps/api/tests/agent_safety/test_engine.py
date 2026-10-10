@@ -142,3 +142,19 @@ def test_repeated_destructive_attempt_is_blocked_and_in_context() -> None:
     assert [item.decision for item in run.actions] == ["BLOCK", "BLOCK"]
     assert run.actions[1].context["history"]["repeated_attempts"] == 1
     assert run.actions[1].context["history"]["previous_denied_operations"] == ["rm -rf /"]
+
+
+def test_run_events_are_sequenced_simulated_and_cover_pipeline() -> None:
+    scenario = next(item for item in seeded_agent_scenarios() if item.id == "agent-mcp-poisoning")
+    run = run_scenario(scenario, default_policy_rules())
+    event_types = [event.type for event in run.events]
+
+    assert [event.sequence for event in run.events] == list(range(1, len(run.events) + 1))
+    assert all(event.source == "simulated" for event in run.events)
+    assert event_types[0] == "run.created"
+    assert event_types[1] == "agent.task_received"
+    assert "context.built" in event_types
+    assert "policy.decision" in event_types
+    assert "result.inspected" in event_types
+    assert "action.prevented" in event_types
+    assert event_types[-1] == "run.completed"

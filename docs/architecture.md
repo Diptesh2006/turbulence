@@ -178,7 +178,7 @@ Comparison direction is deterministic:
 
 ## Agent Safety Lab
 
-The Agent Safety Lab is a separate simulation domain exposed under `/api/agent-safety`. Its scenarios contain deterministic proposed actions. `AgentSafetyService` applies enabled `PolicyRule` records by ascending priority, then stable rule id. The evaluator produces an inspectable decision, match explanation, synthetic-secret references, and fixture-only result for each action.
+The Agent Safety Lab is a separate simulation domain exposed under `/api/agent-safety`. Its scenarios contain deterministic proposed actions. `AgentSafetyService` applies enabled `PolicyRule` records by ascending priority, then stable rule id. The evaluator produces an inspectable decision, match explanation, synthetic-secret references, fixture-only result, and monotonically sequenced simulated events for each action.
 
 ```text
 Agent scenario -> proposed action -> context fields -> priority policy match

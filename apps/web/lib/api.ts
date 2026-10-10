@@ -355,6 +355,13 @@ export const agentRunSchema = z.object({
   safety_score: z.number(),
   attack_containment_rate: z.number().nullable(),
   actions: z.array(agentActionSchema),
+  events: z.array(z.object({
+    sequence: z.number(),
+    type: z.string(),
+    source: z.literal("simulated"),
+    timestamp: z.string(),
+    payload: z.record(z.unknown()),
+  })),
   metrics: z.record(z.union([z.number(), z.null()])),
   created_at: z.string(),
 });

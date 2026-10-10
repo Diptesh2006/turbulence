@@ -57,6 +57,18 @@ export default function AgentRunDetailPage() {
           </article>
         ))}
       </section>
+      <details className="mt-6 border-y bg-white">
+        <summary className="cursor-pointer px-4 py-3 font-semibold">Simulation event timeline ({run.data.events.length})</summary>
+        <ol className="divide-y">
+          {run.data.events.map((event) => (
+            <li key={event.sequence} className="grid gap-2 px-4 py-3 text-sm md:grid-cols-[56px_220px_1fr]">
+              <span className="metadata text-muted-foreground">{String(event.sequence).padStart(3, "0")}</span>
+              <span className="font-medium">{event.type}</span>
+              <span className="text-muted-foreground">{JSON.stringify(event.payload)}</span>
+            </li>
+          ))}
+        </ol>
+      </details>
       {replay.data ? <p className="mt-4 text-sm">Replay created: <Link className="text-primary underline" href={`/agent-safety/runs/${replay.data.id}`}>{replay.data.id}</Link></p> : null}
     </div>
   );

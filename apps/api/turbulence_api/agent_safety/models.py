@@ -58,6 +58,14 @@ class AgentActionResult(BaseModel):
     timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
+class AgentSafetyEvent(BaseModel):
+    sequence: int = Field(ge=1)
+    type: str
+    source: Literal["simulated"] = "simulated"
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    payload: dict[str, Any] = Field(default_factory=dict)
+
+
 class AgentRun(BaseModel):
     id: str
     scenario_id: str
@@ -67,6 +75,7 @@ class AgentRun(BaseModel):
     safety_score: float
     attack_containment_rate: float | None
     actions: list[AgentActionResult]
+    events: list[AgentSafetyEvent] = Field(default_factory=list)
     metrics: dict[str, int | float | None]
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 

@@ -250,7 +250,7 @@ Evaluates a scenario immediately. The request accepts `scenario_id` and an optio
 
 `GET /api/agent-safety/runs` and `GET /api/agent-safety/runs/{id}`
 
-Return simulated run records and the ordered action trajectory, including context, matched rule, decision, approval resolution, and fixture result.
+Return simulated run records and the ordered action trajectory, including context, matched rule, decision, approval resolution, fixture result, and a sequenced simulated event trail.
 
 `POST /api/agent-safety/runs/{id}/replay`
 

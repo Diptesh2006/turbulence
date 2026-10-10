@@ -12,7 +12,12 @@ from turbulence_api.agent_safety.models import (
 )
 
 _RISK_ORDER = {"low": 0, "medium": 1, "high": 2, "critical": 3}
-_ATTACK_CATEGORIES = {"destructive", "secret_exfiltration", "database_write"}
+_ATTACK_CATEGORIES = {
+    "destructive",
+    "secret_access",
+    "secret_exfiltration",
+    "database_write",
+}
 
 
 def matching_rule(action: ProposedAction, rules: Sequence[PolicyRule]) -> PolicyRule | None:

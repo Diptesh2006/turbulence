@@ -42,6 +42,7 @@ def test_secret_flow_is_synthetic_and_exfiltration_is_blocked() -> None:
     run = run_scenario(scenario, default_policy_rules(), run_id="secret-test")
 
     assert run.metrics["synthetic_secrets_tracked"] == 1
+    assert run.actions[0].decision == "BLOCK"
     assert run.actions[-1].decision == "BLOCK"
     assert run.actions[-1].simulated_result["simulated"] is True
     assert run.attack_containment_rate == 100
@@ -130,3 +131,14 @@ def test_require_approval_resolves_as_simulated_rejection() -> None:
     assert result.approval_resolution == "simulated_rejected"
     assert result.prevented is True
     assert result.simulated_result["executed"] is False
+
+
+def test_repeated_destructive_attempt_is_blocked_and_in_context() -> None:
+    scenario = next(
+        item for item in seeded_agent_scenarios() if item.id == "agent-repeated-destructive-action"
+    )
+    run = run_scenario(scenario, default_policy_rules())
+
+    assert [item.decision for item in run.actions] == ["BLOCK", "BLOCK"]
+    assert run.actions[1].context["history"]["repeated_attempts"] == 1
+    assert run.actions[1].context["history"]["previous_denied_operations"] == ["rm -rf /"]

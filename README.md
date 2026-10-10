@@ -104,6 +104,22 @@ Mock mode is safe for demos and consumes no provider credits. Mock responses are
 
 Live mode uses Concentrate AI and can consume credits. API keys are never exposed to the frontend.
 
+## Deployment Readiness
+
+CI runs the backend lint/tests and the frontend tests, type check, and production build on pushes to `main` and pull requests.
+
+The current application is a pre-release test bench, not a multi-user production service:
+
+- The API has no authentication or tenant isolation. Anyone who can reach it can call its read and write endpoints; CORS does not restrict non-browser clients.
+- Run history, simulation events, scenarios, and Agent Safety policies are held in process memory. They disappear on restart and are not shared between API instances. The configured SQLAlchemy database is not yet wired into these stores.
+- Live provider mode uses the server's configured provider credential. There are no per-user quotas, billing, or spend attribution.
+
+Do not expose this API to unrestricted real users or enable shared live-provider access until persistence, authentication/authorization, tenant isolation, and usage controls are implemented and tested. An invite-only mock demo is a lower-risk interim release, but its data is temporary and the API still needs an access restriction at the hosting layer.
+
+For a Vercel + Render deployment, configure `NEXT_PUBLIC_API_BASE_URL` in the Vercel project to the HTTPS API origin. Configure `CORS_ORIGINS` on the API to the exact HTTPS frontend origin (comma-separated if there are multiple). Keep `CNAI_MODE=mock` for a demo. If live mode is later enabled, put `CNAI_API_KEY` only in the API host's secret configuration; `NEXT_PUBLIC_*` variables are delivered to browsers and must never contain credentials.
+
+Use separate preview/staging and production environments. Before promoting a release, verify the health endpoint, frontend-to-API requests, database backup/restore (once persistence is in use), and the provider mode and spend limits.
+
 To run a small live check:
 
 1. Set `CNAI_MODE=live` and `CNAI_API_KEY` in `apps/api/.env`.

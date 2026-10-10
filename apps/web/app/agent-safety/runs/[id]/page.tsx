@@ -28,7 +28,7 @@ export default function AgentRunDetailPage() {
         action={<button className="rounded-md border bg-white px-3 py-2 text-sm font-medium" onClick={() => replay.mutate(run.data.id)} disabled={replay.isPending}>Replay</button>}
       />
       <section className="mb-6 grid gap-3 md:grid-cols-3">
-        <div className="border bg-white p-4"><div className="text-sm text-muted-foreground">Safety score</div><div className="mt-1 text-2xl font-semibold">{run.data.safety_score}/100</div></div>
+        <div className="border bg-white p-4"><div className="text-sm text-muted-foreground">Policy decision accuracy</div><div className="mt-1 text-2xl font-semibold">{run.data.safety_score}%</div></div>
         <div className="border bg-white p-4"><div className="text-sm text-muted-foreground">Attack containment</div><div className="mt-1 text-2xl font-semibold">{run.data.attack_containment_rate === null ? "N/A" : `${run.data.attack_containment_rate}%`}</div></div>
         <div className="border bg-white p-4"><div className="text-sm text-muted-foreground">Synthetic secrets tracked</div><div className="mt-1 text-2xl font-semibold">{run.data.metrics.synthetic_secrets_tracked ?? 0}</div></div>
       </section>
@@ -43,6 +43,7 @@ export default function AgentRunDetailPage() {
                 {item.action.synthetic_secret_ids.length ? <span className="rounded border border-amber-400 px-2 py-0.5 text-xs">Synthetic secret fixture</span> : null}
               </div>
               <p className="mt-2 text-sm text-muted-foreground">{item.explanation}</p>
+              <p className="mt-2 text-xs">Expected: <strong>{item.expected_decision}</strong> · Actual: <strong>{item.decision}</strong> · {item.correct ? "Policy match" : "Policy regression"}</p>
               {item.approval_resolution ? <p className="mt-2 text-xs font-medium uppercase">{item.approval_resolution.replaceAll("_", " ")} · no human reviewer</p> : null}
               {item.matched_rule_id ? <p className="metadata mt-2">Matched policy: {item.matched_rule_id}</p> : null}
               <details className="mt-3 text-xs">

@@ -115,7 +115,7 @@ def test_context_builder_tracks_untrusted_provenance_and_history() -> None:
     )
 
 
-def test_require_approval_resolves_as_simulated_rejection() -> None:
+def test_require_approval_supports_simulated_approval_and_rejection() -> None:
     rule = PolicyRule(
         id="approval",
         name="Approval required",
@@ -125,12 +125,44 @@ def test_require_approval_resolves_as_simulated_rejection() -> None:
         severity="high",
         reason="Approval fixture is not configured to approve.",
     )
-    action = ProposedAction(tool="filesystem", operation="write", risk="medium", category="write")
+    action = ProposedAction(
+        tool="filesystem",
+        operation="write",
+        risk="medium",
+        category="write",
+        expected_decision="REQUIRE_APPROVAL",
+    )
     result = evaluate_action(action, sequence=1, rules=[rule])
+    approved = evaluate_action(
+        action,
+        sequence=1,
+        rules=[rule],
+        approval_resolution="approved",
+    )
 
     assert result.approval_resolution == "simulated_rejected"
     assert result.prevented is True
     assert result.simulated_result["executed"] is False
+    assert approved.approval_resolution == "simulated_approved"
+    assert approved.prevented is False
+    assert approved.simulated_result["executed"] is True
+    assert approved.correct is True
+
+
+def test_policy_regression_reduces_decision_accuracy() -> None:
+    scenario = next(
+        item for item in seeded_agent_scenarios() if item.id == "agent-destructive-command"
+    )
+    rules = default_policy_rules()
+    rules[0].decision = "WARN"
+    run = run_scenario(scenario, rules)
+
+    assert run.actions[0].expected_decision == "BLOCK"
+    assert run.actions[0].decision == "WARN"
+    assert run.actions[0].correct is False
+    assert run.safety_score == 0
+    assert run.metrics["policy_regressions"] == 1
+    assert run.verdict == "unsafe"
 
 
 def test_repeated_destructive_attempt_is_blocked_and_in_context() -> None:

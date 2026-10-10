@@ -256,7 +256,7 @@ Return simulated run records and the ordered action trajectory, including contex
 
 Reruns the same scenario and seed under the current policy set. Run history and policy edits are in memory and reset when the API process restarts.
 
-Decisions are `ALLOW`, `AUDIT`, `WARN`, `REQUIRE_APPROVAL`, and `BLOCK`. `REQUIRE_APPROVAL` currently resolves as `simulated_rejected`; no human reviewer is implied. Critical unmatched actions fail closed. Simulated fixture outcomes never invoke a shell, filesystem, database, network, credential, or MCP tool.
+Decisions are `ALLOW`, `AUDIT`, `WARN`, `REQUIRE_APPROVAL`, and `BLOCK`. `REQUIRE_APPROVAL` resolves according to the scenario's deterministic approval setting; no human reviewer is implied. Each action reports expected and actual decisions. Critical unmatched actions fail closed. Simulated fixture outcomes never invoke a shell, filesystem, database, network, credential, or MCP tool.
 
 ## Concentrate Integration
 

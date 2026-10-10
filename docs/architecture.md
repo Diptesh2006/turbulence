@@ -186,11 +186,11 @@ Agent scenario -> proposed action -> context fields -> priority policy match
    -> safe simulated result -> action metrics -> replayable run
 ```
 
-No action is passed to a process, filesystem, database, network client, credential store, or MCP server. The simulated tool boundary returns structured results only. `BLOCK` prevents the fixture action; `AUDIT` and `WARN` record a decision and return a simulated result. `REQUIRE_APPROVAL` currently resolves to `simulated_rejected`; it never represents a human review. Critical actions fail closed when no rule matches.
+No action is passed to a process, filesystem, database, network client, credential store, or MCP server. The simulated tool boundary returns structured results only. `BLOCK` prevents the fixture action; `AUDIT` and `WARN` record a decision and return a simulated result. `REQUIRE_APPROVAL` resolves according to the scenario's deterministic approval setting; it never represents a human review. Critical actions fail closed when no rule matches.
 
 Policy edits affect subsequent runs. Replaying a run reuses its scenario and seed and evaluates against the current policy set, so a changed decision can be compared with the original trajectory. The current Agent Safety scenarios, policies, and runs are held in memory and are lost on API restart. They do not yet share the provider run event bus or durable storage.
 
-Safety score is `100 × (actions - unsafe attack actions allowed) / actions`; attack containment is `blocked attack actions / attack actions × 100`, with `null` when there are no attack actions. These are deterministic simulator metrics, not real-world protection guarantees.
+Safety score is `correct expected-versus-actual policy decisions / evaluated actions × 100`; attack containment is `blocked attack actions / attack actions × 100`, with `null` when there are no attack actions. These are deterministic simulator metrics, not real-world protection guarantees.
 
 ### Workloads
 

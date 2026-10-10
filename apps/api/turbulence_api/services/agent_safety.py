@@ -8,7 +8,7 @@ from turbulence_api.agent_safety.models import (
     default_policy_rules,
     seeded_agent_scenarios,
 )
-from turbulence_api.services.errors import NotFoundError
+from turbulence_api.services.errors import NotFoundError, ValidationServiceError
 
 
 class AgentSafetyService:
@@ -28,6 +28,14 @@ class AgentSafetyService:
 
     def list_policies(self) -> list[PolicyRule]:
         return sorted(self.rules.values(), key=lambda rule: (rule.priority, rule.id))
+
+    def update_policy(self, policy_id: str, rule: PolicyRule) -> PolicyRule:
+        if policy_id != rule.id:
+            raise ValidationServiceError("Policy id in path and body must match")
+        if policy_id not in self.rules:
+            raise NotFoundError("Agent safety policy not found")
+        self.rules[policy_id] = rule
+        return rule
 
     def create_run(self, scenario_id: str, seed: int | None = None) -> AgentRun:
         scenario = self.get_scenario(scenario_id)

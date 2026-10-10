@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Request, status
 
-from turbulence_api.agent_safety.models import AgentRun, AgentRunRequest
+from turbulence_api.agent_safety.models import AgentRun, AgentRunRequest, PolicyRule
 from turbulence_api.services.agent_safety import AgentSafetyService
 
 router = APIRouter(prefix="/agent-safety", tags=["agent-safety"])
@@ -18,6 +18,11 @@ async def list_scenarios(request: Request) -> dict:
 @router.get("/policies")
 async def list_policies(request: Request) -> dict:
     return {"items": _service(request).list_policies(), "source": "simulated"}
+
+
+@router.put("/policies/{policy_id}", response_model=PolicyRule)
+async def update_policy(policy_id: str, rule: PolicyRule, request: Request) -> PolicyRule:
+    return _service(request).update_policy(policy_id, rule)
 
 
 @router.post("/runs", response_model=AgentRun, status_code=status.HTTP_201_CREATED)

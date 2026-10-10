@@ -1,4 +1,8 @@
-from turbulence_api.agent_safety.engine import evaluate_action, matching_rule, run_scenario
+from turbulence_api.agent_safety.engine import (
+    evaluate_action,
+    matching_rule,
+    run_scenario,
+)
 from turbulence_api.agent_safety.models import (
     PolicyRule,
     ProposedAction,
@@ -94,3 +98,35 @@ def test_unmatched_critical_action_fails_closed() -> None:
     )
     assert result.decision == "BLOCK"
     assert result.executed is False
+
+
+def test_context_builder_tracks_untrusted_provenance_and_history() -> None:
+    scenario = next(item for item in seeded_agent_scenarios() if item.id == "agent-mcp-poisoning")
+    run = run_scenario(scenario, default_policy_rules())
+    attempted_secret_context = run.actions[1].context
+
+    assert run.actions[0].context["provenance"] == "untrusted"
+    assert attempted_secret_context["environment"] == "staging-simulated"
+    assert attempted_secret_context["history"]["previous_actions"] == 1
+    assert (
+        "read_untrusted_resource"
+        not in attempted_secret_context["history"]["previous_denied_operations"]
+    )
+
+
+def test_require_approval_resolves_as_simulated_rejection() -> None:
+    rule = PolicyRule(
+        id="approval",
+        name="Approval required",
+        description="Require simulated approval.",
+        priority=1,
+        decision="REQUIRE_APPROVAL",
+        severity="high",
+        reason="Approval fixture is not configured to approve.",
+    )
+    action = ProposedAction(tool="filesystem", operation="write", risk="medium", category="write")
+    result = evaluate_action(action, sequence=1, rules=[rule])
+
+    assert result.approval_resolution == "simulated_rejected"
+    assert result.prevented is True
+    assert result.simulated_result["executed"] is False

@@ -50,8 +50,10 @@ class AgentActionResult(BaseModel):
     decision: Decision
     matched_rule_id: str | None
     explanation: str
+    context: dict[str, Any] = Field(default_factory=dict)
     executed: bool
     prevented: bool
+    approval_resolution: Literal["simulated_approved", "simulated_rejected"] | None = None
     simulated_result: dict[str, Any]
     timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
 

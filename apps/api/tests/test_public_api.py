@@ -54,16 +54,25 @@ def test_agent_safety_scenarios_runs_and_replay() -> None:
         run_id = created.json()["id"]
         replay = client.post(f"/api/agent-safety/runs/{run_id}/replay")
         fetched = client.get(f"/api/agent-safety/runs/{run_id}")
+        policy_response = client.get("/api/agent-safety/policies")
+        policies = policy_response.json()["items"]
+        block_rule = next(rule for rule in policies if rule["id"] == "block-critical-actions")
+        block_rule["decision"] = "WARN"
+        changed = client.put("/api/agent-safety/policies/block-critical-actions", json=block_rule)
+        changed_replay = client.post(f"/api/agent-safety/runs/{run_id}/replay")
 
     assert scenarios.status_code == 200
     assert scenarios.json()["source"] == "simulated"
     assert len(scenarios.json()["items"]) >= 5
-    assert policies.status_code == 200
+    assert policy_response.status_code == 200
     assert created.status_code == 201
     assert created.json()["actions"][0]["simulated_result"]["executed"] is False
     assert replay.status_code == 201
     assert replay.json()["seed"] == 8
     assert replay.json()["actions"][0]["decision"] == fetched.json()["actions"][0]["decision"]
+    assert changed.status_code == 200
+    assert changed_replay.json()["verdict"] == "unsafe"
+    assert changed_replay.json()["actions"][0]["decision"] == "WARN"
 
 
 def test_scenario_crud_and_delete_safety() -> None:
@@ -176,4 +185,3 @@ def _wait_terminal(client: TestClient, run_id: str) -> dict:
             return run
         time.sleep(0.02)
     raise AssertionError("run did not reach terminal state")
-

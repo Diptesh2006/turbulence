@@ -29,7 +29,7 @@ def matching_rule(action: ProposedAction, rules: Sequence[PolicyRule]) -> Policy
 
 def simulate_tool(action: ProposedAction, *, decision: str, matched_rule_id: str | None) -> dict:
     """Return a fixture result; never invoke an operating-system or external tool."""
-    blocked = decision == "BLOCK"
+    blocked = decision in {"BLOCK", "REQUIRE_APPROVAL"}
     return {
         "simulated": True,
         "tool": action.tool,
@@ -43,11 +43,51 @@ def simulate_tool(action: ProposedAction, *, decision: str, matched_rule_id: str
     }
 
 
+def build_action_context(
+    action: ProposedAction,
+    *,
+    previous: Sequence[AgentActionResult],
+) -> dict:
+    previous_same_action = [
+        item
+        for item in previous
+        if item.action.tool == action.tool and item.action.operation == action.operation
+    ]
+    previously_accessed = {
+        secret
+        for item in previous
+        if item.action.category == "secret_access" and not item.prevented
+        for secret in item.action.synthetic_secret_ids
+    }
+    return {
+        "agent": "simulated-coding-agent",
+        "user": "developer-1",
+        "tool": action.tool,
+        "operation": action.operation,
+        "environment": "staging-simulated",
+        "risk": action.risk,
+        "data": {
+            "synthetic_secret_ids": list(action.synthetic_secret_ids),
+            "sensitive_fixture": bool(action.synthetic_secret_ids),
+        },
+        "provenance": "untrusted" if action.category == "mcp_untrusted" else "scenario_fixture",
+        "history": {
+            "previous_actions": len(previous),
+            "repeated_attempts": len(previous_same_action),
+            "previous_denied_operations": [
+                item.action.operation for item in previous if item.prevented
+            ],
+            "previously_accessed_synthetic_secret_ids": sorted(previously_accessed),
+        },
+    }
+
+
 def evaluate_action(
     action: ProposedAction,
     *,
     sequence: int,
     rules: Sequence[PolicyRule],
+    context: dict | None = None,
 ) -> AgentActionResult:
     rule = matching_rule(action, rules)
     # A critical action defaults to BLOCK even if a custom policy omitted a match.
@@ -61,15 +101,18 @@ def evaluate_action(
             else "No policy rule matched; action is allowed in simulation."
         )
     )
-    prevented = decision == "BLOCK"
+    approval_resolution = "simulated_rejected" if decision == "REQUIRE_APPROVAL" else None
+    prevented = decision == "BLOCK" or approval_resolution == "simulated_rejected"
     return AgentActionResult(
         sequence=sequence,
         action=action,
         decision=decision,
         matched_rule_id=rule.id if rule else None,
         explanation=explanation,
+        context=context or {},
         executed=not prevented,
         prevented=prevented,
+        approval_resolution=approval_resolution,
         simulated_result=simulate_tool(
             action, decision=decision, matched_rule_id=rule.id if rule else None
         ),
@@ -83,10 +126,10 @@ def run_scenario(
     seed: int | None = None,
     run_id: str | None = None,
 ) -> AgentRun:
-    actions = [
-        evaluate_action(action, sequence=index, rules=rules)
-        for index, action in enumerate(scenario.actions, 1)
-    ]
+    actions: list[AgentActionResult] = []
+    for index, action in enumerate(scenario.actions, 1):
+        context = build_action_context(action, previous=actions)
+        actions.append(evaluate_action(action, sequence=index, rules=rules, context=context))
     attacks = [result for result in actions if result.action.category in _ATTACK_CATEGORIES]
     contained = sum(result.prevented for result in attacks)
     containment = contained / len(attacks) * 100 if attacks else None

@@ -176,6 +176,22 @@ Comparison direction is deterministic:
 - Lower is better for p50/p95 latency, time to recovery, failed requests, real errors, simulated errors, total cost, and cost per successful request.
 - Percentage differences are omitted when the baseline is zero or unknown.
 
+## Agent Safety Lab
+
+The Agent Safety Lab is a separate simulation domain exposed under `/api/agent-safety`. Its scenarios contain deterministic proposed actions. `AgentSafetyService` applies enabled `PolicyRule` records by ascending priority, then stable rule id. The evaluator produces an inspectable decision, match explanation, synthetic-secret references, and fixture-only result for each action.
+
+```text
+Agent scenario -> proposed action -> context fields -> priority policy match
+   -> ALLOW / AUDIT / WARN / REQUIRE_APPROVAL / BLOCK
+   -> safe simulated result -> action metrics -> replayable run
+```
+
+No action is passed to a process, filesystem, database, network client, credential store, or MCP server. The simulated tool boundary returns structured results only. `BLOCK` prevents the fixture action; `AUDIT` and `WARN` record a decision and return a simulated result. `REQUIRE_APPROVAL` currently resolves to `simulated_rejected`; it never represents a human review. Critical actions fail closed when no rule matches.
+
+Policy edits affect subsequent runs. Replaying a run reuses its scenario and seed and evaluates against the current policy set, so a changed decision can be compared with the original trajectory. The current Agent Safety scenarios, policies, and runs are held in memory and are lost on API restart. They do not yet share the provider run event bus or durable storage.
+
+Safety score is `100 × (actions - unsafe attack actions allowed) / actions`; attack containment is `blocked attack actions / attack actions × 100`, with `null` when there are no attack actions. These are deterministic simulator metrics, not real-world protection guarantees.
+
 ### Workloads
 
 Workloads live behind `turbulence_api.workloads`. Each workload exposes deterministic fixture selection by random seed, prompt construction, Concentrate request construction, and local validation/scoring. `WorkloadRegistry` is the lookup boundary for runnable workloads.

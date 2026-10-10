@@ -1,14 +1,17 @@
 "use client";
 
-import { Activity, BarChart3, GitCompare, Home, PlaneTakeoff, ScrollText } from "lucide-react";
+import { Activity, BarChart3, GitCompare, Home, PlaneTakeoff, ScrollText, ShieldAlert } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 
 const navItems = [
   { href: "/", label: "Overview", icon: Home },
-  { href: "/scenarios", label: "Scenarios", icon: ScrollText },
-  { href: "/simulations/new", label: "New simulation", icon: PlaneTakeoff },
+  { href: "/scenarios", label: "Provider scenarios", icon: ScrollText },
+  { href: "/agent-safety", label: "Agent Safety Lab", icon: ShieldAlert },
+  { href: "/agent-safety/runs", label: "Safety runs", icon: Activity },
+  { href: "/agent-safety/policies", label: "Safety policies", icon: ScrollText },
+  { href: "/simulations/new", label: "New provider run", icon: PlaneTakeoff },
   { href: "/compare", label: "Compare", icon: GitCompare },
 ];
 

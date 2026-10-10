@@ -2,8 +2,11 @@
 
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowRight, ClipboardList, RadioTower, ServerCrash } from "lucide-react";
+import { ArrowRight, ClipboardList, RadioTower, ServerCrash, ShieldAlert } from "lucide-react";
 import {
+  getAgentPolicies,
+  getAgentRuns,
+  getAgentScenarios,
   getHealth,
   getIntegrationStatus,
   getRuns,
@@ -23,13 +26,16 @@ export default function Home() {
   });
   const scenarios = useQuery({ queryKey: ["scenarios"], queryFn: getScenarios });
   const runs = useQuery({ queryKey: ["runs", 1, 5], queryFn: () => getRuns(1, 5) });
+  const agentScenarios = useQuery({ queryKey: ["agent-scenarios"], queryFn: getAgentScenarios });
+  const agentRuns = useQuery({ queryKey: ["agent-runs"], queryFn: getAgentRuns });
+  const agentPolicies = useQuery({ queryKey: ["agent-policies"], queryFn: getAgentPolicies });
 
   return (
     <div>
       <PageHeader
-        eyebrow="Turbulence / AI Flight Simulator"
-        title="Crash-test your LLM stack before production."
-        description="Run deterministic workloads through routing, fallback, and fault-injection paths before a customer finds the weak point."
+        eyebrow="Turbulence / Pre-Production Flight Simulator for LLMs and Autonomous Agents"
+        title="Crash-test your AI stack before production."
+        description="Test provider failures, fallback behavior, agent actions, security policies, and recovery paths in a deterministic pre-production environment."
         action={
           <Link
             href="/simulations/new"
@@ -41,11 +47,24 @@ export default function Home() {
         }
       />
 
+      <section className="mb-6 grid gap-4 lg:grid-cols-2" aria-label="Product test planes">
+        <Link href="/scenarios" className="panel block border-l-4 border-primary p-5 hover:bg-muted/30">
+          <div className="text-xs font-semibold uppercase text-primary">Provider Reliability</div>
+          <h2 className="mt-2 text-lg font-semibold">What happens when model infrastructure fails?</h2>
+          <p className="mt-2 text-sm text-muted-foreground">Outages, rate limits, latency spikes, malformed output, routing, fallback, and recovery metrics.</p>
+        </Link>
+        <Link href="/agent-safety" className="panel block border-l-4 border-red-600 p-5 hover:bg-muted/30">
+          <div className="flex items-center gap-2 text-xs font-semibold uppercase text-red-700"><ShieldAlert className="h-4 w-4" /> Agent Safety Lab · Simulated</div>
+          <h2 className="mt-2 text-lg font-semibold">What happens when an agent behaves dangerously?</h2>
+          <p className="mt-2 text-sm text-muted-foreground">Destructive actions, secret access, MCP poisoning, prompt injection, tool misuse, and exfiltration attempts.</p>
+        </Link>
+      </section>
+
       <section className="grid gap-4 lg:grid-cols-4">
-        <MetricCard label="Scenarios" value={scenarios.data?.items.length} detail="configured" />
+        <MetricCard label="Provider scenarios" value={scenarios.data?.items.length} detail="configured" />
         <MetricCard label="Recent runs" value={runs.data?.total} detail="stored in API" />
-        <MetricCard label="API environment" value={health.data?.environment ?? null} />
-        <MetricCard label="Simulation mode" value={health.data?.simulation_mode ?? null} />
+        <MetricCard label="Agent safety runs" value={agentRuns.data?.items.length} detail="simulated evaluations" />
+        <MetricCard label="Safety policies" value={agentPolicies.data?.items.filter((policy) => policy.enabled).length} detail="enabled baseline rules" />
       </section>
 
       <section className="mt-6 grid gap-6 xl:grid-cols-[1fr_360px]">
@@ -124,7 +143,7 @@ export default function Home() {
               <h2 className="font-semibold">Product overview</h2>
             </div>
             <div className="mt-4 space-y-3 text-sm text-muted-foreground">
-              <p>Structured workloads validate routing, fallback, and response correctness.</p>
+              <p>Agent actions run only through safe simulated fixtures. No real shell, filesystem, database, or network operation is invoked.</p>
               <p>Faults are labeled simulated and never represented as real provider incidents.</p>
               <p>Reports preserve unknown costs and tokens as unknown, not zero.</p>
             </div>
@@ -133,9 +152,10 @@ export default function Home() {
           <div className="panel p-4">
             <div className="flex items-center gap-2">
               <ClipboardList className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-              <h2 className="font-semibold">Configured scenarios</h2>
+              <h2 className="font-semibold">Agent safety scenarios</h2>
             </div>
-            <div className="mt-3 text-3xl font-semibold">{scenarios.data?.items.length ?? "n/a"}</div>
+              <div className="mt-3 text-3xl font-semibold">{agentScenarios.data?.items.length ?? "n/a"}</div>
+              <div className="text-sm text-muted-foreground">SIMULATED fixtures</div>
           </div>
         </aside>
       </section>

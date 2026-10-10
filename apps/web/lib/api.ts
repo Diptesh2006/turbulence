@@ -300,6 +300,65 @@ export const comparisonSchema = z.object({
   }),
 });
 
+export const agentActionSchema = z.object({
+  sequence: z.number(),
+  action: z.object({
+    tool: z.string(),
+    operation: z.string(),
+    arguments: z.record(z.unknown()),
+    risk: z.enum(["low", "medium", "high", "critical"]),
+    category: z.string(),
+    synthetic_secret_ids: z.array(z.string()),
+  }),
+  decision: z.enum(["ALLOW", "AUDIT", "WARN", "REQUIRE_APPROVAL", "BLOCK"]),
+  matched_rule_id: z.string().nullable(),
+  explanation: z.string(),
+  context: z.record(z.unknown()),
+  executed: z.boolean(),
+  prevented: z.boolean(),
+  approval_resolution: z.enum(["simulated_approved", "simulated_rejected"]).nullable(),
+  simulated_result: z.record(z.unknown()),
+  timestamp: z.string(),
+});
+
+export const agentScenarioSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  description: z.string(),
+  category: z.string(),
+  task: z.string(),
+  severity: z.enum(["low", "medium", "high", "critical"]),
+  expected_outcome: z.string(),
+  seed: z.number(),
+  actions: z.array(agentActionSchema.shape.action),
+});
+
+export const agentPolicySchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  description: z.string(),
+  priority: z.number(),
+  enabled: z.boolean(),
+  categories: z.array(z.string()),
+  min_risk: z.enum(["low", "medium", "high", "critical"]).nullable(),
+  decision: z.enum(["ALLOW", "AUDIT", "WARN", "REQUIRE_APPROVAL", "BLOCK"]),
+  severity: z.enum(["low", "medium", "high", "critical"]),
+  reason: z.string(),
+});
+
+export const agentRunSchema = z.object({
+  id: z.string(),
+  scenario_id: z.string(),
+  seed: z.number(),
+  state: z.enum(["completed", "failed"]),
+  verdict: z.enum(["safe", "contained", "unsafe", "inconclusive"]),
+  safety_score: z.number(),
+  attack_containment_rate: z.number().nullable(),
+  actions: z.array(agentActionSchema),
+  metrics: z.record(z.union([z.number(), z.null()])),
+  created_at: z.string(),
+});
+
 export type HealthResponse = z.infer<typeof healthSchema>;
 export type IntegrationStatus = z.infer<typeof integrationStatusSchema>;
 export type WorkloadSummary = z.infer<typeof workloadSchema>;
@@ -311,6 +370,9 @@ export type RequestRecord = z.infer<typeof requestRecordSchema>;
 export type SimulationEvent = z.infer<typeof simulationEventSchema>;
 export type Report = z.infer<typeof reportSchema>["report"];
 export type Comparison = z.infer<typeof comparisonSchema>["comparison"];
+export type AgentScenario = z.infer<typeof agentScenarioSchema>;
+export type AgentPolicy = z.infer<typeof agentPolicySchema>;
+export type AgentRun = z.infer<typeof agentRunSchema>;
 
 async function requestJson<TSchema extends z.ZodTypeAny>(
   path: string,
@@ -399,4 +461,38 @@ export function compareRuns(baselineRunId: string, candidateRunId: string) {
       candidate_run_id: candidateRunId,
     }),
   });
+}
+
+export function getAgentScenarios() {
+  return requestJson("/api/agent-safety/scenarios", z.object({ items: z.array(agentScenarioSchema), source: z.literal("simulated") }));
+}
+
+export function getAgentPolicies() {
+  return requestJson("/api/agent-safety/policies", z.object({ items: z.array(agentPolicySchema), source: z.literal("simulated") }));
+}
+
+export function updateAgentPolicy(policy: AgentPolicy) {
+  return requestJson(`/api/agent-safety/policies/${policy.id}`, agentPolicySchema, {
+    method: "PUT",
+    body: JSON.stringify(policy),
+  });
+}
+
+export function getAgentRuns() {
+  return requestJson("/api/agent-safety/runs", z.object({ items: z.array(agentRunSchema), source: z.literal("simulated") }));
+}
+
+export function createAgentRun(scenarioId: string) {
+  return requestJson("/api/agent-safety/runs", agentRunSchema, {
+    method: "POST",
+    body: JSON.stringify({ scenario_id: scenarioId }),
+  });
+}
+
+export function replayAgentRun(runId: string) {
+  return requestJson(`/api/agent-safety/runs/${runId}/replay`, agentRunSchema, { method: "POST" });
+}
+
+export function getAgentRun(runId: string) {
+  return requestJson(`/api/agent-safety/runs/${runId}`, agentRunSchema);
 }

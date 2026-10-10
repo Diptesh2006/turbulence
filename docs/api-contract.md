@@ -228,6 +228,36 @@ Lower is better for:
 - total cost
 - cost per successful request
 
+## Agent Safety Lab
+
+The `/api/agent-safety` routes evaluate deterministic scenarios against an in-memory policy set. These results are simulated and do not represent actions on real systems.
+
+`GET /api/agent-safety/scenarios`
+
+Returns seeded agent scenarios and `source: "simulated"`.
+
+`GET /api/agent-safety/policies`
+
+Returns policy rules in priority order.
+
+`PUT /api/agent-safety/policies/{id}`
+
+Updates a policy rule for subsequent evaluations. The path id must match the rule id. Replay the prior run after a policy change to compare outcomes.
+
+`POST /api/agent-safety/runs`
+
+Evaluates a scenario immediately. The request accepts `scenario_id` and an optional non-negative `seed`; omitting the seed uses the scenario's default seed.
+
+`GET /api/agent-safety/runs` and `GET /api/agent-safety/runs/{id}`
+
+Return simulated run records and the ordered action trajectory, including context, matched rule, decision, approval resolution, and fixture result.
+
+`POST /api/agent-safety/runs/{id}/replay`
+
+Reruns the same scenario and seed under the current policy set. Run history and policy edits are in memory and reset when the API process restarts.
+
+Decisions are `ALLOW`, `AUDIT`, `WARN`, `REQUIRE_APPROVAL`, and `BLOCK`. `REQUIRE_APPROVAL` currently resolves as `simulated_rejected`; no human reviewer is implied. Critical unmatched actions fail closed. Simulated fixture outcomes never invoke a shell, filesystem, database, network, credential, or MCP tool.
+
 ## Concentrate Integration
 
 `GET /api/integrations/concentrate/status`

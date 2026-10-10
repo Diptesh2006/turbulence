@@ -1,6 +1,8 @@
 # Turbulence
 
-Turbulence is an AI Flight Simulator for crash-testing LLM applications before production. It runs deterministic workloads through Concentrate AI, injects reproducible client-boundary faults, exercises routing and fallback strategies, streams simulation events to a cockpit UI, and produces post-flight reliability reports.
+**Pre-Production Flight Simulator for LLMs and Autonomous Agents**
+
+Turbulence answers two pre-production questions: what happens when model infrastructure fails, and what happens when an autonomous agent proposes an unsafe action? The Provider Reliability Lab exercises deterministic workloads, provider routing, injected faults, fallback, and recovery through Concentrate AI. The Agent Safety Lab evaluates deterministic action proposals against policy and records simulated outcomes.
 
 The current implementation includes:
 
@@ -14,6 +16,10 @@ The current implementation includes:
 - Scenario presets and scenario builder.
 - Post-flight reports with deterministic verdicts and recommendations.
 - Run comparison UI.
+- Agent Safety Lab with destructive command, synthetic secret, MCP poisoning, and database misuse scenarios.
+- Priority-ordered policy evaluation, simulated tool outcomes, action inspection, safety metrics, and deterministic replay.
+
+Agent Safety runs are isolated simulations. They do not execute shell commands or access real filesystems, databases, networks, credentials, cloud services, or MCP servers. `ALLOW`, `AUDIT`, and `WARN` produce fixture-only outcomes; `BLOCK` prevents the simulated operation. Approval decisions are deterministic and labeled simulated. These features evaluate sample policies; they are not endpoint protection, a production interceptor, EDR, DLP, IAM, or a replacement for an agent security gateway.
 
 ## Repository Layout
 
@@ -126,6 +132,13 @@ Preset scenarios remain mock by default so switching the backend to live does no
 - `/runs/{id}` shows the live cockpit and SSE event stream.
 - `/runs/{id}/report` shows the post-flight reliability report.
 - `/compare` compares two completed or terminal runs.
+- `/agent-safety` runs simulated agent-safety scenarios.
+- `/agent-safety/runs` and `/agent-safety/runs/{id}` show the action trajectory and outcomes.
+- `/agent-safety/policies` reviews and changes baseline policy decisions for replay.
+
+Agent Safety API routes are under `/api/agent-safety`: `GET /scenarios`, `GET/PUT /policies`, `POST/GET /runs`, `GET /runs/{id}`, and `POST /runs/{id}/replay`. Agent scenarios, policies, and runs currently use in-memory storage and reset when the API process restarts. Provider scenario persistence remains as implemented by the existing repository.
+
+The safety score is `100 × (total actions - unsafe actions allowed) / total actions`; attack containment is `blocked attack actions / attack actions × 100`, and is `N/A` when a scenario contains no attack action. Both metrics are deterministic and describe simulated fixtures only.
 
 ## Post-Flight Verdicts
 

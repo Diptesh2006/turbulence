@@ -61,7 +61,15 @@ export default function Home() {
       </section>
 
       <section className="grid gap-4 lg:grid-cols-4">
-        <MetricCard label="Provider scenarios" value={scenarios.data?.items.length} detail="configured" />
+        <MetricCard
+          label="Latest safety score"
+          value={
+            agentRuns.data?.items[0]
+              ? `${agentRuns.data.items[0].safety_score}%`
+              : undefined
+          }
+          detail={agentRuns.data?.items[0] ? "policy decision accuracy" : "no completed safety run"}
+        />
         <MetricCard label="Recent runs" value={runs.data?.total} detail="stored in API" />
         <MetricCard label="Agent safety runs" value={agentRuns.data?.items.length} detail="simulated evaluations" />
         <MetricCard label="Safety policies" value={agentPolicies.data?.items.filter((policy) => policy.enabled).length} detail="enabled baseline rules" />
@@ -154,10 +162,34 @@ export default function Home() {
               <ClipboardList className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
               <h2 className="font-semibold">Agent safety scenarios</h2>
             </div>
-              <div className="mt-3 text-3xl font-semibold">{agentScenarios.data?.items.length ?? "n/a"}</div>
-              <div className="text-sm text-muted-foreground">SIMULATED fixtures</div>
+            <div className="mt-3 text-3xl font-semibold">
+              {agentScenarios.data?.items.length ?? "n/a"}
+            </div>
+            <div className="text-sm text-muted-foreground">SIMULATED fixtures</div>
           </div>
         </aside>
+      </section>
+
+      <section className="mt-6 border-t pt-5">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="font-semibold">Recent Agent Safety runs</h2>
+            <p className="text-sm text-muted-foreground">Deterministic simulated evaluations.</p>
+          </div>
+          <Link href="/agent-safety/runs" className="text-sm font-medium text-primary">All safety runs</Link>
+        </div>
+        {agentRuns.isLoading ? <div className="mt-3"><LoadingSkeleton rows={1} /></div> : null}
+        {agentRuns.isError ? <div className="mt-3"><ErrorState title="Safety runs unavailable" error={agentRuns.error} /></div> : null}
+        {agentRuns.data?.items.length === 0 ? <p className="mt-3 text-sm text-muted-foreground">No safety runs yet.</p> : null}
+        <div className="mt-2 divide-y border-y bg-white">
+          {agentRuns.data?.items.slice(0, 3).map((run) => (
+            <Link key={run.id} href={`/agent-safety/runs/${run.id}`} className="grid gap-2 px-3 py-3 text-sm hover:bg-muted/50 md:grid-cols-[1fr_120px_100px]">
+              <span><strong className="font-medium">{run.scenario_id}</strong><span className="metadata ml-2 text-muted-foreground">{run.id}</span></span>
+              <span className="uppercase">{run.verdict}</span>
+              <span>{run.safety_score}%</span>
+            </Link>
+          ))}
+        </div>
       </section>
     </div>
   );

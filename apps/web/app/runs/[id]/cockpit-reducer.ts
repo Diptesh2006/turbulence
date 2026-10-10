@@ -410,7 +410,13 @@ export function buildRunEventsUrl(
   runId: string,
   lastSequence: number | null,
 ): string {
-  const url = new URL(`/api/runs/${runId}/events`, apiBaseUrl);
+  const path = `/api/runs/${encodeURIComponent(runId)}/events`;
+  if (!apiBaseUrl) {
+    const query = lastSequence === null ? "" : `?last_event_id=${lastSequence}`;
+    return `${path}${query}`;
+  }
+
+  const url = new URL(path, apiBaseUrl);
   if (lastSequence !== null) {
     url.searchParams.set("last_event_id", String(lastSequence));
   }

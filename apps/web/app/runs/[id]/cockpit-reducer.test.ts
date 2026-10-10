@@ -421,6 +421,9 @@ describe("cockpit-reducer & helpers", () => {
     expect(buildRunEventsUrl("http://localhost:8000", "run-123", 42)).toBe(
       "http://localhost:8000/api/runs/run-123/events?last_event_id=42",
     );
+    expect(buildRunEventsUrl("", "run-123", 42)).toBe(
+      "/api/runs/run-123/events?last_event_id=42",
+    );
   });
 
   it("labels mock gateway responses as mock source badges", () => {

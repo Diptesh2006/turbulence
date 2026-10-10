@@ -1,5 +1,6 @@
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from secrets import compare_digest
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
@@ -89,6 +90,20 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+    @app.middleware("http")
+    async def require_api_access_token(request: Request, call_next):
+        if request.url.path == "/api/health" or settings.environment == "development":
+            return await call_next(request)
+        if not settings.api_access_token or len(settings.api_access_token.encode()) < 32:
+            return JSONResponse(
+                status_code=503,
+                content={"detail": "API access is not configured"},
+            )
+        provided = request.headers.get("x-internal-api-token", "")
+        if not compare_digest(provided, settings.api_access_token):
+            return JSONResponse(status_code=401, content={"detail": "Unauthorized"})
+        return await call_next(request)
 
     app.include_router(api_router, prefix="/api")
 

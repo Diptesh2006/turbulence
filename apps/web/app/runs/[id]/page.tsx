@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import {
   getRun,
+  getApiBaseUrl,
   startRun,
   cancelRun,
   Run,
@@ -148,7 +149,7 @@ export default function RunCockpitPage({ params }: { params: { id: string } }) {
       if (isCancelled) return;
 
       dispatch({ type: "SET_SSE_STATUS", status: "connecting" });
-      const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
+      const apiBaseUrl = getApiBaseUrl();
       es = new EventSource(buildRunEventsUrl(apiBaseUrl, params.id, lastSequenceRef.current));
 
       es.onopen = () => {

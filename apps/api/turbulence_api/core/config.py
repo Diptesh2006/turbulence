@@ -9,6 +9,7 @@ class Settings(BaseSettings):
     version: str = Field(default="0.1.0", validation_alias="APP_VERSION")
     environment: str = Field(default="development", validation_alias="ENVIRONMENT")
     simulation_mode: str = Field(default="disabled", validation_alias="SIMULATION_MODE")
+    api_access_token: str | None = Field(default=None, validation_alias="API_ACCESS_TOKEN")
     database_url: str = Field(
         default="sqlite+aiosqlite:///./turbulence.db",
         validation_alias="DATABASE_URL",

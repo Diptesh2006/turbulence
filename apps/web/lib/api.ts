@@ -1,6 +1,9 @@
 import { z } from "zod";
 
-const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
+export function getApiBaseUrl() {
+  if (process.env.NODE_ENV === "production") return "";
+  return process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
+}
 
 export const runStateSchema = z.enum(["created", "running", "completed", "failed", "cancelling", "cancelled"]);
 
@@ -390,7 +393,7 @@ async function requestJson<TSchema extends z.ZodTypeAny>(
   schema: TSchema,
   init?: RequestInit,
 ): Promise<z.output<TSchema>> {
-  const response = await fetch(`${apiBaseUrl}${path}`, {
+  const response = await fetch(`${getApiBaseUrl()}${path}`, {
     ...init,
     headers: {
       Accept: "application/json",

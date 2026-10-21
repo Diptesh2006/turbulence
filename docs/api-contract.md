@@ -274,3 +274,7 @@ Sends one short structured-output request only in live mode. It never returns th
 - Provider failures, costs, tokens, and routing decisions are never fabricated.
 - Injected faults are labeled `simulated`.
 - Concentrate-specific payload assumptions remain behind the Concentrate adapter.
+
+# BreakMyBot integration contract
+
+`GET /api/integrations/breakmybot/capabilities` returns the `breakmybot-turbulence-v1` manifest. Turbulence currently simulates faults at its own Concentrate routing boundary and records simulated provenance. It does not inject tool faults into an arbitrary external agent or provide an external-target HTTP fault proxy. Agent-safety scenario results are seeded simulator fixtures, not observations of the connected BreakMyBot target. Consumers must not count these results toward a target application's reliability score.

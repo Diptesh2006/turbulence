@@ -17,3 +17,21 @@ async def health() -> HealthResponse:
         simulation_mode=settings.simulation_mode,
     )
 
+
+@router.get("/integrations/breakmybot/capabilities")
+async def breakmybot_capabilities() -> dict:
+    """Declare scope without conflating simulations with external target tests."""
+    return {
+        "contract": "breakmybot-turbulence-v1",
+        "service": "Turbulence",
+        "capabilities": {
+            "provider_boundary_simulation": True,
+            "simulation_event_provenance": True,
+            "external_target_tool_injection": False,
+            "external_target_http_fault_proxy": False,
+        },
+        "fault_scope": "Turbulence-managed Concentrate routing attempts only",
+        "event_source": "simulated",
+        "agent_safety_scope": "seeded simulator fixtures; not external-target observations",
+    }
+

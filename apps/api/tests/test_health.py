@@ -18,6 +18,19 @@ def test_health_returns_service_metadata() -> None:
     }
 
 
+def test_breakmybot_manifest_does_not_claim_external_target_injection() -> None:
+    client = TestClient(create_app())
+
+    response = client.get("/api/integrations/breakmybot/capabilities")
+
+    assert response.status_code == 200
+    manifest = response.json()
+    assert manifest["contract"] == "breakmybot-turbulence-v1"
+    assert manifest["capabilities"]["provider_boundary_simulation"] is True
+    assert manifest["capabilities"]["external_target_tool_injection"] is False
+    assert manifest["event_source"] == "simulated"
+
+
 def test_root_returns_service_metadata_and_links() -> None:
     client = TestClient(create_app())
 
